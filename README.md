@@ -11,7 +11,7 @@ IoT-enabled production monitoring for the Duraknot fence-roll line — A-1 Launc
 | [`index.html`](index.html) | The dashboard itself. Single file, zero dependencies, runs offline. Ships with a built-in simulator so it's always demonstrable, and auto-detects a live backend if one is reachable (see the ⚙ Settings panel). |
 | [`backend/`](backend/) | Flask REST API + SQLite persistence + alert engine that turns the dashboard into a live system once sensor hardware is attached. See [`backend/README.md`](backend/README.md). |
 | [`firmware/`](firmware/duraknot_esp32.ino) | ESP32 sketch: rotary encoder for length/speed, vibration sensor for defect events, streams JSON at 1 Hz. |
-| [`tests/`](tests/) | `test_oee.py` — 7 unit tests on the OEE formula (hand-calculated case, perfect line, availability-only loss, performance clamp, quality floor, insufficient-data guard, A×P×Q identity). `render_check.js` — headless jsdom harness that instruments every chart's canvas context and verifies all 6 charts draw and every DOM reference resolves. |
+| [`tests/`](tests/) | `test_oee.py` — 7 unit tests on the OEE formula (hand-calculated case, perfect line, availability-only loss, performance clamp, quality floor, insufficient-data guard, A×P×Q identity). `render_check.js` — headless jsdom harness that instruments every chart's canvas context and verifies all 6 charts draw and every DOM reference resolves. `validate_output_realism.js` — reproduces the submission's "five independent 20-minute runs" evidence on demand instead of leaving it as a frozen number in a slide. |
 | [`submission.pdf`](submission.pdf) | The case study report as submitted. |
 
 ## Why a backend and firmware exist alongside a "zero-dependency" dashboard
@@ -31,6 +31,9 @@ pytest tests/test_oee.py -v
 
 # Render verification harness
 cd tests && npm install && node render_check.js
+
+# Reproduce the "five 20-minute runs" output-realism evidence
+cd tests && node validate_output_realism.js
 
 # Backend (turns the dashboard into a live system)
 cd backend

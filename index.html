@@ -828,21 +828,45 @@ function loadHistory(){
 function saveHistory(){
   try{ localStorage.setItem(HISTORY_KEY, JSON.stringify(shiftHistory.slice(0,200))); }catch(e){}
 }
+// When connected to a real backend, that backend's SQLite-persisted shift
+// log is the source of truth (it reflects readings from actual hardware,
+// possibly across multiple viewers) -- local browser storage is only used
+// while running the built-in simulator.
+var backendShiftHistory = null;
+function currentHistoryList(){ return (liveMode && backendShiftHistory) ? backendShiftHistory : shiftHistory; }
+function mapBackendShift(rec){
+  return {
+    ts: rec.ended_at*1000,   // backend timestamps are Unix seconds, dashboard uses ms
+    plannedSec: rec.planned_sec, runSec: rec.run_sec, downSec: rec.down_sec,
+    totalLength: rec.total_length_m, defectEvents: rec.defect_events, stoppages: rec.stoppages,
+    availability: rec.availability, performance: rec.performance, quality: rec.quality, oee: rec.oee
+  };
+}
+function refreshBackendHistory(){
+  if(!liveMode) return;
+  fetch(apiUrl('/api/shifts')).then(function(r){ return r.json(); }).then(function(list){
+    backendShiftHistory = list.map(mapBackendShift);
+    renderHistory();
+  }).catch(function(){});
+}
 function logCurrentShift(){
   var o = computeOEE();
   if(!o || state.plannedSec<5){
     addAlert('info','Nothing to log yet — shift is too short.');
     return false;
   }
-  shiftHistory.unshift({
-    ts: nowMs(),
-    plannedSec: state.plannedSec, runSec: state.runSec, downSec: state.downSec,
-    totalLength: state.totalLength, defectEvents: state.defectEvents, stoppages: state.stoppages,
-    availability: o.availability, performance: o.performance, quality: o.quality, oee: o.oee
-  });
-  saveHistory();
   if(liveMode){
-    fetch(apiUrl('/api/shifts/end'), {method:'POST'}).catch(function(){});
+    fetch(apiUrl('/api/shifts/end'), {method:'POST'})
+      .then(function(){ refreshBackendHistory(); })
+      .catch(function(){ addAlert('warning','Could not reach the backend to log the shift.'); });
+  } else {
+    shiftHistory.unshift({
+      ts: nowMs(),
+      plannedSec: state.plannedSec, runSec: state.runSec, downSec: state.downSec,
+      totalLength: state.totalLength, defectEvents: state.defectEvents, stoppages: state.stoppages,
+      availability: o.availability, performance: o.performance, quality: o.quality, oee: o.oee
+    });
+    saveHistory();
   }
   return true;
 }
@@ -851,17 +875,18 @@ function fmtDuration(sec){
   return (h?h+'h ':'')+(m?m+'m ':'')+s+'s';
 }
 function renderHistory(){
-  document.getElementById('h-count').textContent = shiftHistory.length;
-  document.getElementById('h-source').textContent = liveMode ? 'this device · local storage' : 'local storage';
+  var list = currentHistoryList();
+  document.getElementById('h-count').textContent = list.length;
+  document.getElementById('h-source').textContent = liveMode ? (backendShiftHistory ? 'backend · SQLite' : 'connecting to backend…') : 'local storage';
   var tb = document.getElementById('history-tbody');
-  if(!shiftHistory.length){
+  if(!list.length){
     tb.innerHTML = '<tr><td colspan="7" class="empty">No shifts logged yet — click "End Shift" in the top bar.</td></tr>';
     document.getElementById('h-best').textContent='—'; document.getElementById('h-best-sub').textContent='—';
     document.getElementById('h-avg').textContent='—';
     document.getElementById('h-length').innerHTML='0<span class="unit">m</span>';
     return;
   }
-  tb.innerHTML = shiftHistory.map(function(s){
+  tb.innerHTML = list.map(function(s){
     return '<tr><td class="mono">'+new Date(s.ts).toLocaleString()+'</td>'+
            '<td class="mono">'+fmtDuration(s.plannedSec)+'</td>'+
            '<td class="mono">'+s.totalLength.toFixed(1)+' m</td>'+
@@ -870,9 +895,9 @@ function renderHistory(){
            '<td class="mono" style="color:'+colorFor(s.quality*100)+'">'+(s.quality*100).toFixed(1)+'%</td>'+
            '<td class="mono r" style="color:'+colorFor(s.oee*100)+'"><b>'+(s.oee*100).toFixed(1)+'%</b></td></tr>';
   }).join('');
-  var best = shiftHistory.reduce(function(a,b){return b.oee>a.oee?b:a;}, shiftHistory[0]);
-  var avg = shiftHistory.reduce(function(s,x){return s+x.oee;},0)/shiftHistory.length;
-  var totalLen = shiftHistory.reduce(function(s,x){return s+x.totalLength;},0);
+  var best = list.reduce(function(a,b){return b.oee>a.oee?b:a;}, list[0]);
+  var avg = list.reduce(function(s,x){return s+x.oee;},0)/list.length;
+  var totalLen = list.reduce(function(s,x){return s+x.totalLength;},0);
   document.getElementById('h-best').textContent=(best.oee*100).toFixed(1)+'%';
   document.getElementById('h-best-sub').textContent=new Date(best.ts).toLocaleDateString();
   document.getElementById('h-avg').textContent=(avg*100).toFixed(1)+'%';
@@ -882,9 +907,10 @@ function drawShiftOee(){
   var cv=document.getElementById('cv-shift-oee'); var s=setupCanvas(cv); if(!s) return;
   var ctx=s.ctx, box={l:38,t:22,w:s.w-38-14,h:s.h-22-24};
   gridAndAxis(ctx,box,100,function(v){return v.toFixed(0)+'%';});
-  if(shiftHistory.length<1){ ctx.fillStyle=C.dim; ctx.font='12px Segoe UI'; ctx.textAlign='center';
+  var list = currentHistoryList();
+  if(list.length<1){ ctx.fillStyle=C.dim; ctx.font='12px Segoe UI'; ctx.textAlign='center';
     ctx.fillText('no shifts logged yet',s.w/2,s.h/2); return; }
-  var series = shiftHistory.slice(0,30).map(function(x){return x.oee*100;}).reverse();
+  var series = list.slice(0,30).map(function(x){return x.oee*100;}).reverse();
   if(series.length<2){ series=[series[0],series[0]]; }
   drawSeries(ctx,box,series,100,C.purple,true,0);
   ctx.fillStyle=C.dim; ctx.font='10px Segoe UI'; ctx.textAlign='center'; ctx.textBaseline='top';
@@ -917,6 +943,7 @@ Array.prototype.forEach.call(document.querySelectorAll('.nav-item'),function(ite
     currentView=item.getAttribute('data-view');
     document.getElementById('view-'+currentView).classList.add('active');
     document.getElementById('view-title').textContent=TITLES[currentView];
+    if(currentView==='history') refreshBackendHistory();   // pick up shifts logged by other viewers/devices
     requestAnimationFrame(renderCharts);   // canvases were 0-width while hidden
   });
 });
@@ -1105,6 +1132,7 @@ function tryLiveBackend(){
       document.getElementById('mode-badge').className='badge live';
       document.getElementById('mode-text').textContent='Live Hardware';
       addAlert('info','Connected to production line sensor node — streaming live data.');
+      refreshBackendHistory();
       if(timer) clearInterval(timer);
       var lastDefectTotal=null;
       timer=setInterval(function(){
