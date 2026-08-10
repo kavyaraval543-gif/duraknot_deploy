@@ -56,9 +56,11 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,-ap
 .modal-actions{display:flex;gap:8px;justify-content:flex-end}
 .modal-actions .btn{padding:7px 14px}
 
-.tour-scrim{position:fixed;inset:0;background:rgba(4,7,12,.74);backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);z-index:140}
-.tour-target{position:relative;z-index:141;outline:3px solid var(--accent);outline-offset:3px;border-radius:12px;scroll-margin:100px;transition:outline-color .2s ease}
-.tour-tooltip{position:fixed;z-index:142;background:var(--panel);border:1px solid var(--accent);border-radius:14px;padding:20px 22px;width:360px;max-width:calc(100vw - 32px);box-shadow:0 20px 60px rgba(0,0,0,.6);opacity:0;transition:opacity .2s ease, transform .2s ease}
+.tour-scrim{position:fixed;inset:0;background:rgba(4,7,12,.74);backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);z-index:140;opacity:0;transition:opacity .35s cubic-bezier(.22,1,.36,1)}
+.tour-scrim.in{opacity:1}
+.tour-target{position:relative;z-index:141;outline:3px solid var(--accent);outline-offset:3px;border-radius:12px;scroll-margin:100px;box-shadow:0 0 0 0 rgba(61,155,255,0);transition:outline-color .3s ease, box-shadow .4s cubic-bezier(.22,1,.36,1)}
+.tour-target.glow{box-shadow:0 0 0 8px var(--tour-glow, rgba(61,155,255,.16))}
+.tour-tooltip{position:fixed;z-index:142;background:var(--panel);border:1px solid var(--accent);border-radius:14px;padding:20px 22px;width:360px;max-width:calc(100vw - 32px);box-shadow:0 20px 60px rgba(0,0,0,.6);opacity:0;transition:opacity .38s cubic-bezier(.22,1,.36,1), transform .38s cubic-bezier(.22,1,.36,1)}
 .tour-tooltip h4{font-size:19px;font-weight:700;margin-bottom:10px;line-height:1.3}
 .tour-tooltip p{font-size:15px;color:var(--text);line-height:1.6;margin-bottom:18px}
 .tour-tooltip.tour-hero{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%)!important;width:420px;padding:36px 38px;text-align:center}
@@ -1030,7 +1032,12 @@ var TOUR_STEPS = [
 var tourIndex = -1, tourEls = null;
 
 function tourCleanupHighlight(){
-  Array.prototype.forEach.call(document.querySelectorAll('.tour-target'), function(el){ el.classList.remove('tour-target'); });
+  Array.prototype.forEach.call(document.querySelectorAll('.tour-target'), function(el){ el.classList.remove('tour-target','glow'); });
+}
+function hexToRgba(hex, alpha){
+  var h = hex.replace('#','');
+  var r = parseInt(h.substring(0,2),16), g = parseInt(h.substring(2,4),16), b = parseInt(h.substring(4,6),16);
+  return 'rgba('+r+','+g+','+b+','+alpha+')';
 }
 function tourKeyHandler(e){
   if(e.key==='Escape') endTour();
@@ -1145,7 +1152,9 @@ function showTourStep(i, direction){
     if(!target){ tourNext(); return; }
     target.classList.add('tour-target');
     target.style.outlineColor = step.color;
+    target.style.setProperty('--tour-glow', hexToRgba(step.color, .16));
     target.scrollIntoView({block:'center', behavior:'smooth'});
+    requestAnimationFrame(function(){ target.classList.add('glow'); });   // separate frame so the box-shadow transition actually plays
     setTimeout(function(){ if(tourIndex===i) renderTourTooltip(step, target, direction); }, 240);
   });
 }
@@ -1156,6 +1165,7 @@ function startTour(){
   var tooltip = document.createElement('div'); tooltip.className='tour-tooltip';
   document.body.appendChild(scrim);
   document.body.appendChild(tooltip);
+  requestAnimationFrame(function(){ scrim.classList.add('in'); });
   tourEls = {scrim:scrim, tooltip:tooltip};
   document.addEventListener('keydown', tourKeyHandler);
   showTourStep(0);
