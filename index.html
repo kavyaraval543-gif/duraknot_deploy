@@ -1014,7 +1014,6 @@ document.getElementById('btn-export').addEventListener('click',function(){
 });
 
 /* ---------------- GUIDED TOUR ---------------- */
-var TOUR_KEY = 'duraknot_tour_seen_v1';
 var TOUR_STEPS = [
   {hero:true, view:'overview', color:C.accent, title:'Welcome to Duraknot', text:'A guided walkthrough of the production intelligence dashboard for the Duraknot fence-roll line — what it tracks, how it decides, and how to read it. About a minute, skip any time.'},
   {view:'overview', target:'#mode-badge', color:C.accent, title:'Simulation vs Live Hardware', text:'Shows whether you\'re looking at the built-in simulator or a real connected sensor node. Right now it\'s simulated — calibrated against real industry benchmarks, not random noise.'},
@@ -1043,22 +1042,43 @@ function endTour(){
   if(tourEls){ tourEls.scrim.remove(); tourEls.tooltip.remove(); tourEls=null; }
   document.removeEventListener('keydown', tourKeyHandler);
   tourIndex=-1;
-  try{ localStorage.setItem(TOUR_KEY,'1'); }catch(e){}
+  // Always leave the visitor back on the home view, regardless of which
+  // step the tour ended on (Done, Skip and Escape all count as "the end").
+  var overviewNav = document.querySelector('[data-view="overview"]');
+  if(overviewNav && currentView!=='overview') overviewNav.click();
 }
-function tourNext(){ if(tourIndex < TOUR_STEPS.length-1) showTourStep(tourIndex+1); else endTour(); }
-function tourPrev(){ if(tourIndex > 0) showTourStep(tourIndex-1); }
+function tourNext(){ if(tourIndex < TOUR_STEPS.length-1) showTourStep(tourIndex+1, 1); else endTour(); }
+function tourPrev(){ if(tourIndex > 0) showTourStep(tourIndex-1, -1); }
 
+// Tries below/above/right/left of the target, in that order, picking the
+// first that actually clears the target's own bounds -- a naive "clamp
+// into viewport" fallback (the old behavior) can still land the tooltip
+// directly on top of a large panel it's supposed to be describing.
 function positionTooltip(tooltip, target){
   var r = target.getBoundingClientRect();
   var tw = tooltip.offsetWidth, th = tooltip.offsetHeight;
-  var top = r.bottom + 14;
-  if(top + th > window.innerHeight - 10) top = r.top - th - 14;
-  if(top < 10) top = Math.max(10, Math.min(window.innerHeight - th - 10, r.top));
-  var left = r.left;
-  if(left + tw > window.innerWidth - 10) left = window.innerWidth - tw - 10;
-  if(left < 10) left = 10;
-  tooltip.style.top = top+'px';
-  tooltip.style.left = left+'px';
+  var m = 18, vw = window.innerWidth, vh = window.innerHeight;
+  function clampX(x){ return Math.max(m, Math.min(vw - tw - m, x)); }
+  function clampY(y){ return Math.max(m, Math.min(vh - th - m, y)); }
+  var centerX = r.left + r.width/2 - tw/2, centerY = r.top + r.height/2 - th/2;
+  var candidates = [
+    { name:'bottom', top:r.bottom+m,   left:clampX(centerX), fits: r.bottom+m+th <= vh-m },
+    { name:'top',    top:r.top-m-th,   left:clampX(centerX), fits: r.top-m-th >= m },
+    { name:'right',  top:clampY(centerY), left:r.right+m,    fits: r.right+m+tw <= vw-m },
+    { name:'left',   top:clampY(centerY), left:r.left-m-tw,  fits: r.left-m-tw >= m }
+  ];
+  var chosen = null;
+  for(var i=0;i<candidates.length;i++){ if(candidates[i].fits){ chosen=candidates[i]; break; } }
+  if(!chosen){
+    // Target fills too much of the viewport for any side to fit cleanly --
+    // use whichever side has the most room rather than centering on top of it.
+    var space = { bottom: vh-r.bottom, top: r.top, right: vw-r.right, left: r.left };
+    var bestSide = Object.keys(space).reduce(function(a,b){ return space[b]>space[a]?b:a; });
+    chosen = candidates.filter(function(c){ return c.name===bestSide; })[0];
+    chosen.top = clampY(chosen.top); chosen.left = clampX(chosen.left);
+  }
+  tooltip.style.top = chosen.top+'px';
+  tooltip.style.left = chosen.left+'px';
 }
 function tourDots(){
   return TOUR_STEPS.map(function(s,idx){
@@ -1067,7 +1087,7 @@ function tourDots(){
     return '<span class="'+cls+'"'+style+'></span>';
   }).join('');
 }
-function renderTourTooltip(step, target){
+function renderTourTooltip(step, target, direction){
   if(!tourEls) return;
   var tooltip = tourEls.tooltip;
   var isFirst = tourIndex===0, isLast = tourIndex===TOUR_STEPS.length-1;
@@ -1088,19 +1108,24 @@ function renderTourTooltip(step, target){
   document.getElementById('tour-next').addEventListener('click', tourNext);
   var backBtn = document.getElementById('tour-back');
   if(backBtn) backBtn.addEventListener('click', tourPrev);
+  // Slide-in direction: forward (Next) enters from the right, backward
+  // (Back) enters from the left -- makes step changes read as a deck of
+  // slides moving past, not just a content swap.
+  var dx = direction===1 ? 34 : direction===-1 ? -34 : 0;
   if(step.hero){
-    tooltip.style.left=''; tooltip.style.top=''; tooltip.style.transform='';
+    tooltip.style.left=''; tooltip.style.top='';
+    tooltip.style.transform='translate(calc(-50% + '+dx+'px), -50%)';
   } else {
     positionTooltip(tooltip, target);
-    tooltip.style.transform='translateY(6px)';
+    tooltip.style.transform='translateX('+dx+'px)';
   }
   tooltip.style.opacity='0';
   requestAnimationFrame(function(){
     tooltip.style.opacity='1';
-    if(!step.hero) tooltip.style.transform='translateY(0)';
+    tooltip.style.transform = step.hero ? 'translate(-50%,-50%)' : 'translateX(0)';
   });
 }
-function showTourStep(i){
+function showTourStep(i, direction){
   var step = TOUR_STEPS[i];
   tourIndex = i;
   if(currentView !== step.view){
@@ -1115,13 +1140,13 @@ function showTourStep(i){
     // the highlight it precedes or an earlier step's target is left lit.
     if(tourIndex !== i) return;   // superseded by a later step before this frame ran
     tourCleanupHighlight();
-    if(step.hero){ renderTourTooltip(step, null); return; }
+    if(step.hero){ renderTourTooltip(step, null, direction); return; }
     var target = document.querySelector(step.target);
     if(!target){ tourNext(); return; }
     target.classList.add('tour-target');
     target.style.outlineColor = step.color;
     target.scrollIntoView({block:'center', behavior:'smooth'});
-    setTimeout(function(){ if(tourIndex===i) renderTourTooltip(step, target); }, 240);
+    setTimeout(function(){ if(tourIndex===i) renderTourTooltip(step, target, direction); }, 240);
   });
 }
 function startTour(){
@@ -1136,10 +1161,7 @@ function startTour(){
   showTourStep(0);
 }
 document.getElementById('btn-tour').addEventListener('click', startTour);
-(function(){
-  var seen; try{ seen = localStorage.getItem(TOUR_KEY); }catch(e){ seen='1'; }
-  if(!seen) setTimeout(startTour, 900);
-})();
+setTimeout(startTour, 900);   // auto-plays on every visit, not just the first
 
 /* clock */
 setInterval(function(){ document.getElementById('clock').textContent=new Date().toLocaleTimeString(); },1000);
