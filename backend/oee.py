@@ -5,7 +5,7 @@ backend, the frontend simulator and the test suite always agree on the
 formula. Kept dependency-free on purpose.
 """
 
-IDEAL_RATE_DEFAULT = 14.0  # m/min — calibrated ideal cycle rate
+IDEAL_RATE_DEFAULT = 14.0  # m/min — entry/mid-band for welded wire mesh machines, see ../DATA_SOURCES.md
 
 
 def compute_oee(planned_sec, run_sec, total_length_m, defect_events, ideal_rate=IDEAL_RATE_DEFAULT):

@@ -56,6 +56,16 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,-ap
 .modal-actions{display:flex;gap:8px;justify-content:flex-end}
 .modal-actions .btn{padding:7px 14px}
 
+.tour-scrim{position:fixed;inset:0;background:rgba(4,7,12,.72);z-index:140}
+.tour-target{position:relative;z-index:141;outline:3px solid var(--accent);outline-offset:3px;border-radius:12px;scroll-margin:100px}
+.tour-tooltip{position:fixed;z-index:142;background:var(--panel);border:1px solid var(--accent);border-radius:12px;padding:16px 18px;width:300px;max-width:calc(100vw - 32px);box-shadow:0 16px 48px rgba(0,0,0,.55)}
+.tour-tooltip h4{font-size:14px;margin-bottom:6px}
+.tour-tooltip p{font-size:12.5px;color:var(--muted);line-height:1.55;margin-bottom:14px}
+.tour-foot{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.tour-step-count{font-size:11px;color:var(--dim);white-space:nowrap}
+.tour-actions{display:flex;gap:6px}
+.tour-actions .btn{padding:6px 11px}
+
 #content{padding:20px 24px;overflow-y:auto;flex:1}
 .view{display:none}.view.active{display:block}
 
@@ -153,13 +163,14 @@ tr:last-child td{border-bottom:none}
     <button class="btn" id="btn-reset">Reset</button>
     <button class="btn" id="btn-export">Export CSV</button>
     <button class="btn btn-icon" id="btn-settings" title="Backend connection settings">⚙</button>
+    <button class="btn" id="btn-tour" title="Take a guided tour of the dashboard">Tour</button>
   </div>
 
   <div id="content">
 
     <!-- ============== OVERVIEW ============== -->
     <div class="view active" id="view-overview">
-      <div class="grid g4">
+      <div class="grid g4" id="overview-kpis">
         <div class="panel kpi">
           <div class="label">Length Produced</div>
           <div class="val v-accent" id="k-length">0<span class="unit">m</span></div>
@@ -187,11 +198,11 @@ tr:last-child td{border-bottom:none}
       </div>
 
       <div class="grid g21">
-        <div class="panel">
+        <div class="panel" id="panel-trend">
           <h3>Production &amp; Speed <span class="hint">last 90 s · live</span></h3>
           <canvas id="cv-trend" class="cv-tall"></canvas>
         </div>
-        <div class="panel">
+        <div class="panel" id="panel-oee-ring">
           <h3>Overall Equipment Effectiveness</h3>
           <div class="gauge-wrap">
             <svg width="168" height="168" viewBox="0 0 180 180">
@@ -203,7 +214,7 @@ tr:last-child td{border-bottom:none}
             </svg>
             <div class="gauge-note" id="oee-verdict">Collecting data…</div>
           </div>
-          <div class="legend-note">World-class 85% · typical discrete manufacturing 60%</div>
+          <div class="legend-note">World-class 80%+ (top 5–10% of plants) · advanced 70–80% · global average 55–70%</div>
         </div>
       </div>
 
@@ -221,7 +232,7 @@ tr:last-child td{border-bottom:none}
 
     <!-- ============== OEE ============== -->
     <div class="view" id="view-oee">
-      <div class="grid g3">
+      <div class="grid g3" id="oee-gauges">
         <div class="panel gauge-wrap">
           <svg width="146" height="146" viewBox="0 0 180 180">
             <circle cx="90" cy="90" r="72" fill="none" stroke="#1b2534" stroke-width="14"/>
@@ -283,7 +294,7 @@ tr:last-child td{border-bottom:none}
         <div class="panel kpi"><div class="label">Top Defect Cause</div><div class="val" id="q-top" style="font-size:17px;padding-top:6px">—</div><div class="sub" id="q-top-sub">—</div></div>
       </div>
       <div class="grid g11">
-        <div class="panel">
+        <div class="panel" id="panel-pareto">
           <h3>Defect Pareto <span class="hint">bars = count · line = cumulative %</span></h3>
           <canvas id="cv-pareto" class="cv-tall"></canvas>
           <div class="legend-note">Classic 80/20 view — the first bars crossing 80% cumulative are where corrective action pays off most.</div>
@@ -309,7 +320,7 @@ tr:last-child td{border-bottom:none}
         <div class="panel kpi"><div class="label">Warnings</div><div class="val v-warn" id="a-warn">0</div></div>
         <div class="panel kpi"><div class="label">Stoppages</div><div class="val" id="a-stops">0</div><div class="sub" id="a-downtime">0 s downtime</div></div>
       </div>
-      <div class="panel">
+      <div class="panel" id="panel-alertlog">
         <h3>Full Alert Log</h3>
         <table><thead><tr><th style="width:100px">Time</th><th style="width:96px">Level</th><th>Message</th></tr></thead>
         <tbody id="alert-tbody"><tr><td colspan="3" class="empty">No alerts recorded yet</td></tr></tbody></table>
@@ -367,7 +378,7 @@ tr:last-child td{border-bottom:none}
    ===================================================================== */
 
 /* ---------------- CONFIG ---------------- */
-var IDEAL_RATE   = 14.0;    // m/min — calibrated ideal cycle rate
+var IDEAL_RATE   = 14.0;    // m/min — entry/mid-band for welded wire mesh machines (10-20 m/min typical, see DATA_SOURCES.md)
 var ORDER_TARGET = 1200;    // m — current production order quantity
 var RING_CIRC    = 2 * Math.PI * 72;   // 452.39
 var SEED_TICKS   = 1200;    // pre-fill 20 min of line history so the board opens populated
@@ -404,6 +415,8 @@ function nowMs(){ return seeding ? Date.now() - seedRemaining*1000 : Date.now();
 
 /* ---------------- SIMULATION ENGINE ---------------- */
 var sim = {
+  // Stoppage/defect probabilities calibrated against sourced industry benchmarks
+  // (~6-7% downtime, ~2% defect rate) rather than picked arbitrarily — see DATA_SOURCES.md.
   base:12.0, t:0, stopUntil:0, slowUntil:0, status:'RUNNING', total:0, defects:0,
   tick:function(){
     var now = ++this.t;   // virtual seconds
@@ -697,7 +710,7 @@ function renderAlerts(){
 }
 
 /* ---------------- GAUGES ---------------- */
-function colorFor(p){ return p>=85?C.good : p>=60?C.warn : C.crit; }
+function colorFor(p){ return p>=80?C.good : p>=55?C.warn : C.crit; }  // aligned to sourced OEE tiers, see DATA_SOURCES.md
 function setRing(id,txtId,pct){
   var el=document.getElementById(id); if(!el) return;
   var v=Math.max(0,Math.min(100,pct));
@@ -768,7 +781,7 @@ function renderOEE(){
   setRing('ring-p','ring-p-txt',P);
   setRing('ring-q','ring-q-txt',Q);
   document.getElementById('oee-verdict').textContent =
-    O>=85?'World-class performance' : O>=60?'Typical — improvement headroom' : 'Below benchmark — action needed';
+    O>=80?'World-class (top 5–10% of plants)' : O>=70?'Advanced — above global average' : O>=55?'Global average range' : 'Below global average — action needed';
   document.getElementById('a-detail').textContent=o.runtime+' s run / '+o.planned+' s planned';
   document.getElementById('p-detail').textContent=state.totalLength.toFixed(0)+' m of '+o.idealOutput.toFixed(0)+' m ideal';
   document.getElementById('q-detail').textContent=o.badLength.toFixed(1)+' m defect-affected';
@@ -962,6 +975,111 @@ document.getElementById('btn-export').addEventListener('click',function(){
   a.download='duraknot_shift_report_'+Date.now()+'.csv'; a.click();
   URL.revokeObjectURL(url);
 });
+
+/* ---------------- GUIDED TOUR ---------------- */
+var TOUR_KEY = 'duraknot_tour_seen_v1';
+var TOUR_STEPS = [
+  {view:'overview', target:'.brand', title:'Welcome to Duraknot', text:'A quick tour of the production intelligence dashboard for the Duraknot fence-roll line — about a minute, skip any time.'},
+  {view:'overview', target:'#mode-badge', title:'Simulation vs Live Hardware', text:'Shows whether you\'re looking at the built-in simulator or a real connected sensor node. Right now it\'s simulated.'},
+  {view:'overview', target:'#overview-kpis', title:'Live KPIs', text:'Four numbers update every second: length produced, line speed, rolling defect rate, and machine status with uptime.'},
+  {view:'overview', target:'#panel-trend', title:'Production & Speed', text:'A rolling 90-second view of output and speed, so a slowdown is visible before it becomes a stoppage.'},
+  {view:'overview', target:'#panel-oee-ring', title:'Overall Equipment Effectiveness', text:'OEE combines Availability, Performance and Quality into one number — the standard measure of how much of the line\'s theoretical output is actually delivered.'},
+  {view:'oee', target:'#oee-gauges', title:'OEE Analytics', text:'Every component is broken out with its exact formula and inputs, so any figure here can be audited rather than taken on trust.'},
+  {view:'quality', target:'#panel-pareto', title:'Defect Pareto', text:'Defects ranked by root cause. The bars crossing the 80% cumulative line are where a fix pays off the most.'},
+  {view:'alerts', target:'#panel-alertlog', title:'Alert Log', text:'Stoppages, jams and quality deviations raise alerts automatically, throttled so a real problem doesn\'t get lost in noise.'},
+  {view:'history', target:'#btn-end-shift', title:'Shift History', text:'Click "End Shift" to log the current session\'s OEE and start fresh — how the dashboard supports trend analysis across shifts, not just the live 90-second window.'},
+  {view:'history', target:'#btn-settings', title:'Connect Real Hardware', text:'Once the Flask backend and ESP32 sensor node are running, use Settings to point the dashboard at it and switch from simulation to live data.'}
+];
+var tourIndex = -1, tourEls = null;
+
+function tourCleanupHighlight(){
+  Array.prototype.forEach.call(document.querySelectorAll('.tour-target'), function(el){ el.classList.remove('tour-target'); });
+}
+function tourKeyHandler(e){
+  if(e.key==='Escape') endTour();
+  else if(e.key==='ArrowRight' || e.key==='Enter') tourNext();
+  else if(e.key==='ArrowLeft') tourPrev();
+}
+function endTour(){
+  tourCleanupHighlight();
+  if(tourEls){ tourEls.scrim.remove(); tourEls.tooltip.remove(); tourEls=null; }
+  document.removeEventListener('keydown', tourKeyHandler);
+  tourIndex=-1;
+  try{ localStorage.setItem(TOUR_KEY,'1'); }catch(e){}
+}
+function tourNext(){ if(tourIndex < TOUR_STEPS.length-1) showTourStep(tourIndex+1); else endTour(); }
+function tourPrev(){ if(tourIndex > 0) showTourStep(tourIndex-1); }
+
+function positionTooltip(tooltip, target){
+  var r = target.getBoundingClientRect();
+  var tw = tooltip.offsetWidth, th = tooltip.offsetHeight;
+  var top = r.bottom + 14;
+  if(top + th > window.innerHeight - 10) top = r.top - th - 14;
+  if(top < 10) top = Math.max(10, Math.min(window.innerHeight - th - 10, r.top));
+  var left = r.left;
+  if(left + tw > window.innerWidth - 10) left = window.innerWidth - tw - 10;
+  if(left < 10) left = 10;
+  tooltip.style.top = top+'px';
+  tooltip.style.left = left+'px';
+}
+function renderTourTooltip(step, target){
+  if(!tourEls) return;
+  var tooltip = tourEls.tooltip;
+  var isFirst = tourIndex===0, isLast = tourIndex===TOUR_STEPS.length-1;
+  tooltip.innerHTML =
+    '<h4>'+step.title+'</h4><p>'+step.text+'</p>'+
+    '<div class="tour-foot">'+
+      '<span class="tour-step-count">'+(tourIndex+1)+' / '+TOUR_STEPS.length+'</span>'+
+      '<div class="tour-actions">'+
+        '<button class="btn" id="tour-skip">Skip</button>'+
+        (isFirst?'':'<button class="btn" id="tour-back">Back</button>')+
+        '<button class="btn on" id="tour-next">'+(isLast?'Done':'Next')+'</button>'+
+      '</div>'+
+    '</div>';
+  document.getElementById('tour-skip').addEventListener('click', endTour);
+  document.getElementById('tour-next').addEventListener('click', tourNext);
+  var backBtn = document.getElementById('tour-back');
+  if(backBtn) backBtn.addEventListener('click', tourPrev);
+  positionTooltip(tooltip, target);
+}
+function showTourStep(i){
+  var step = TOUR_STEPS[i];
+  tourIndex = i;
+  if(currentView !== step.view){
+    var navEl = document.querySelector('[data-view="'+step.view+'"]');
+    if(navEl) navEl.click();
+  }
+  requestAnimationFrame(function(){
+    // Cleanup happens here, immediately before highlighting, rather than
+    // synchronously at the top of showTourStep -- rapid step advances (fast
+    // clicking, held-down arrow keys) can queue several of these deferred
+    // callbacks before the first one runs, so cleanup must be atomic with
+    // the highlight it precedes or an earlier step's target is left lit.
+    if(tourIndex !== i) return;   // superseded by a later step before this frame ran
+    tourCleanupHighlight();
+    var target = document.querySelector(step.target);
+    if(!target){ tourNext(); return; }
+    target.classList.add('tour-target');
+    target.scrollIntoView({block:'center', behavior:'smooth'});
+    setTimeout(function(){ if(tourIndex===i) renderTourTooltip(step, target); }, 240);
+  });
+}
+function startTour(){
+  endTour();
+  var scrim = document.createElement('div'); scrim.className='tour-scrim';
+  scrim.addEventListener('click', endTour);
+  var tooltip = document.createElement('div'); tooltip.className='tour-tooltip';
+  document.body.appendChild(scrim);
+  document.body.appendChild(tooltip);
+  tourEls = {scrim:scrim, tooltip:tooltip};
+  document.addEventListener('keydown', tourKeyHandler);
+  showTourStep(0);
+}
+document.getElementById('btn-tour').addEventListener('click', startTour);
+(function(){
+  var seen; try{ seen = localStorage.getItem(TOUR_KEY); }catch(e){ seen='1'; }
+  if(!seen) setTimeout(startTour, 900);
+})();
 
 /* clock */
 setInterval(function(){ document.getElementById('clock').textContent=new Date().toLocaleTimeString(); },1000);
