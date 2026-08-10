@@ -56,15 +56,25 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,-ap
 .modal-actions{display:flex;gap:8px;justify-content:flex-end}
 .modal-actions .btn{padding:7px 14px}
 
-.tour-scrim{position:fixed;inset:0;background:rgba(4,7,12,.72);z-index:140}
-.tour-target{position:relative;z-index:141;outline:3px solid var(--accent);outline-offset:3px;border-radius:12px;scroll-margin:100px}
-.tour-tooltip{position:fixed;z-index:142;background:var(--panel);border:1px solid var(--accent);border-radius:14px;padding:20px 22px;width:360px;max-width:calc(100vw - 32px);box-shadow:0 16px 48px rgba(0,0,0,.55)}
+.tour-scrim{position:fixed;inset:0;background:rgba(4,7,12,.74);backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);z-index:140}
+.tour-target{position:relative;z-index:141;outline:3px solid var(--accent);outline-offset:3px;border-radius:12px;scroll-margin:100px;transition:outline-color .2s ease}
+.tour-tooltip{position:fixed;z-index:142;background:var(--panel);border:1px solid var(--accent);border-radius:14px;padding:20px 22px;width:360px;max-width:calc(100vw - 32px);box-shadow:0 20px 60px rgba(0,0,0,.6);opacity:0;transition:opacity .2s ease, transform .2s ease}
 .tour-tooltip h4{font-size:19px;font-weight:700;margin-bottom:10px;line-height:1.3}
 .tour-tooltip p{font-size:15px;color:var(--text);line-height:1.6;margin-bottom:18px}
+.tour-tooltip.tour-hero{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%)!important;width:420px;padding:36px 38px;text-align:center}
+.tour-tooltip.tour-hero h4{font-size:25px;margin-bottom:14px}
+.tour-tooltip.tour-hero p{font-size:16px;margin-bottom:24px}
+.tour-tooltip.tour-hero .tour-dots{justify-content:center}
+.tour-tooltip.tour-hero .tour-foot{flex-direction:column;gap:16px}
+.tour-dots{display:flex;gap:5px;margin-bottom:16px;flex-wrap:wrap}
+.tour-dot{width:6px;height:6px;border-radius:50%;background:#2a3646;transition:background .2s ease,width .2s ease}
+.tour-dot.done{background:var(--muted)}
+.tour-dot.active{width:18px;border-radius:3px}
 .tour-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
 .tour-step-count{font-size:13px;color:var(--muted);white-space:nowrap;font-weight:600}
 .tour-actions{display:flex;gap:8px}
 .tour-actions .btn{padding:8px 15px;font-size:13.5px}
+.tour-actions .btn.on{font-weight:700}
 
 #content{padding:20px 24px;overflow-y:auto;flex:1}
 .view{display:none}.view.active{display:block}
@@ -1006,16 +1016,17 @@ document.getElementById('btn-export').addEventListener('click',function(){
 /* ---------------- GUIDED TOUR ---------------- */
 var TOUR_KEY = 'duraknot_tour_seen_v1';
 var TOUR_STEPS = [
-  {view:'overview', target:'.brand', title:'Welcome to Duraknot', text:'A quick tour of the production intelligence dashboard for the Duraknot fence-roll line — about a minute, skip any time.'},
-  {view:'overview', target:'#mode-badge', title:'Simulation vs Live Hardware', text:'Shows whether you\'re looking at the built-in simulator or a real connected sensor node. Right now it\'s simulated.'},
-  {view:'overview', target:'#overview-kpis', title:'Live KPIs', text:'Four numbers update every second: length produced, line speed, rolling defect rate, and machine status with uptime.'},
-  {view:'overview', target:'#panel-trend', title:'Production & Speed', text:'A rolling 90-second view of output and speed, so a slowdown is visible before it becomes a stoppage.'},
-  {view:'overview', target:'#panel-oee-ring', title:'Overall Equipment Effectiveness', text:'OEE combines Availability, Performance and Quality into one number — the standard measure of how much of the line\'s theoretical output is actually delivered.'},
-  {view:'oee', target:'#oee-gauges', title:'OEE Analytics', text:'Every component is broken out with its exact formula and inputs, so any figure here can be audited rather than taken on trust.'},
-  {view:'quality', target:'#panel-pareto', title:'Defect Pareto', text:'Defects ranked by root cause. The bars crossing the 80% cumulative line are where a fix pays off the most.'},
-  {view:'alerts', target:'#panel-alertlog', title:'Alert Log', text:'Stoppages, jams and quality deviations raise alerts automatically, throttled so a real problem doesn\'t get lost in noise.'},
-  {view:'history', target:'#btn-end-shift', title:'Shift History', text:'Click "End Shift" to log the current session\'s OEE and start fresh — how the dashboard supports trend analysis across shifts, not just the live 90-second window.'},
-  {view:'history', target:'#btn-settings', title:'Connect Real Hardware', text:'Once the Flask backend and ESP32 sensor node are running, use Settings to point the dashboard at it and switch from simulation to live data.'}
+  {hero:true, view:'overview', color:C.accent, title:'Welcome to Duraknot', text:'A guided walkthrough of the production intelligence dashboard for the Duraknot fence-roll line — what it tracks, how it decides, and how to read it. About a minute, skip any time.'},
+  {view:'overview', target:'#mode-badge', color:C.accent, title:'Simulation vs Live Hardware', text:'Shows whether you\'re looking at the built-in simulator or a real connected sensor node. Right now it\'s simulated — calibrated against real industry benchmarks, not random noise.'},
+  {view:'overview', target:'#overview-kpis', color:C.accent, title:'Live KPIs', text:'Four numbers update every second: length produced, line speed, rolling defect rate, and machine status with uptime — the essentials an operator needs at a glance.'},
+  {view:'overview', target:'#panel-trend', color:C.accent, title:'Production & Speed', text:'A rolling 90-second view of output and speed, so a slowdown is visible before it becomes a full stoppage.'},
+  {view:'overview', target:'#panel-oee-ring', color:C.purple, title:'Overall Equipment Effectiveness', text:'OEE combines Availability, Performance and Quality into one number — the industry-standard measure of how much of the line\'s theoretical output is actually delivered.'},
+  {view:'oee', target:'#oee-gauges', color:C.purple, title:'OEE Analytics', text:'Every component is broken out with its exact formula and inputs, so any figure here can be audited rather than taken on trust.'},
+  {view:'quality', target:'#panel-pareto', color:C.warn, title:'Defect Pareto', text:'Defects ranked by root cause. The bars crossing the 80% cumulative line are where fixing one thing eliminates the most defects.'},
+  {view:'alerts', target:'#panel-alertlog', color:C.crit, title:'Alert Log', text:'Stoppages, jams and quality deviations raise alerts automatically, throttled so a real problem doesn\'t get lost in noise.'},
+  {view:'history', target:'#btn-end-shift', color:C.good, title:'Shift History', text:'Click "End Shift" to log the current session\'s OEE and start fresh. Connected to a real backend, this shows the actual persisted history — not just this browser\'s local data.'},
+  {view:'history', target:'#btn-settings', color:C.good, title:'Connect Real Hardware', text:'Once the Flask backend and ESP32 sensor node are running, use Settings to point the dashboard at it and switch from simulation to live data.'},
+  {hero:true, view:'history', color:C.good, title:'That\'s the tour', text:'The KPIs, the OEE math, the alerts, the history — all running from one dependency-free file, live right now. Replay this any time from the Tour button.'}
 ];
 var tourIndex = -1, tourEls = null;
 
@@ -1049,25 +1060,45 @@ function positionTooltip(tooltip, target){
   tooltip.style.top = top+'px';
   tooltip.style.left = left+'px';
 }
+function tourDots(){
+  return TOUR_STEPS.map(function(s,idx){
+    var cls = 'tour-dot' + (idx===tourIndex ? ' active' : (idx<tourIndex ? ' done' : ''));
+    var style = idx===tourIndex ? ' style="background:'+s.color+'"' : '';
+    return '<span class="'+cls+'"'+style+'></span>';
+  }).join('');
+}
 function renderTourTooltip(step, target){
   if(!tourEls) return;
   var tooltip = tourEls.tooltip;
   var isFirst = tourIndex===0, isLast = tourIndex===TOUR_STEPS.length-1;
+  tooltip.classList.toggle('tour-hero', !!step.hero);
+  tooltip.style.borderColor = step.color;
   tooltip.innerHTML =
+    '<div class="tour-dots">'+tourDots()+'</div>'+
     '<h4>'+step.title+'</h4><p>'+step.text+'</p>'+
     '<div class="tour-foot">'+
       '<span class="tour-step-count">'+(tourIndex+1)+' / '+TOUR_STEPS.length+'</span>'+
       '<div class="tour-actions">'+
         '<button class="btn" id="tour-skip">Skip</button>'+
         (isFirst?'':'<button class="btn" id="tour-back">Back</button>')+
-        '<button class="btn on" id="tour-next">'+(isLast?'Done':'Next')+'</button>'+
+        '<button class="btn on" id="tour-next" style="border-color:'+step.color+';color:'+step.color+'">'+(isLast?'Done':'Next')+'</button>'+
       '</div>'+
     '</div>';
   document.getElementById('tour-skip').addEventListener('click', endTour);
   document.getElementById('tour-next').addEventListener('click', tourNext);
   var backBtn = document.getElementById('tour-back');
   if(backBtn) backBtn.addEventListener('click', tourPrev);
-  positionTooltip(tooltip, target);
+  if(step.hero){
+    tooltip.style.left=''; tooltip.style.top=''; tooltip.style.transform='';
+  } else {
+    positionTooltip(tooltip, target);
+    tooltip.style.transform='translateY(6px)';
+  }
+  tooltip.style.opacity='0';
+  requestAnimationFrame(function(){
+    tooltip.style.opacity='1';
+    if(!step.hero) tooltip.style.transform='translateY(0)';
+  });
 }
 function showTourStep(i){
   var step = TOUR_STEPS[i];
@@ -1084,9 +1115,11 @@ function showTourStep(i){
     // the highlight it precedes or an earlier step's target is left lit.
     if(tourIndex !== i) return;   // superseded by a later step before this frame ran
     tourCleanupHighlight();
+    if(step.hero){ renderTourTooltip(step, null); return; }
     var target = document.querySelector(step.target);
     if(!target){ tourNext(); return; }
     target.classList.add('tour-target');
+    target.style.outlineColor = step.color;
     target.scrollIntoView({block:'center', behavior:'smooth'});
     setTimeout(function(){ if(tourIndex===i) renderTourTooltip(step, target); }, 240);
   });
