@@ -1,0 +1,1065 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Duraknot — Production Intelligence Dashboard</title>
+<style>
+:root{
+  --bg:#070b11; --panel:#101722; --panel2:#151e2b; --border:#212c3c;
+  --text:#e9eff7; --muted:#8695a8; --dim:#5a6777;
+  --accent:#3d9bff; --good:#22c98a; --warn:#f5a623; --crit:#ff4d6d; --purple:#a78bfa;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,-apple-system,sans-serif;display:flex;overflow:hidden}
+
+#sidebar{width:214px;background:var(--panel);border-right:1px solid var(--border);padding:18px 0;flex-shrink:0;display:flex;flex-direction:column}
+.brand{padding:0 20px 16px;border-bottom:1px solid var(--border);margin-bottom:12px}
+.brand h1{font-size:15px;font-weight:700;letter-spacing:.03em}
+.brand span{font-size:10.5px;color:var(--muted);display:block;margin-top:3px}
+.nav-item{padding:11px 20px;font-size:13px;color:var(--muted);cursor:pointer;border-left:3px solid transparent;transition:.15s;user-select:none;display:flex;justify-content:space-between;align-items:center}
+.nav-item:hover{background:var(--panel2);color:var(--text)}
+.nav-item.active{background:var(--panel2);color:var(--accent);border-left-color:var(--accent);font-weight:600}
+.nav-item .cnt{font-size:10px;background:var(--crit);color:#fff;border-radius:9px;padding:1px 6px;font-weight:700}
+.side-foot{margin-top:auto;padding:14px 20px 0;border-top:1px solid var(--border);font-size:10.5px;color:var(--dim);line-height:1.6}
+
+#main{flex:1;display:flex;flex-direction:column;min-width:0}
+#topbar{padding:12px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;background:var(--panel);flex-wrap:wrap;flex-shrink:0}
+#topbar h2{font-size:16px;font-weight:600;flex:1;min-width:150px}
+.badge{padding:5px 11px;border-radius:20px;font-size:11px;font-weight:600;border:1px solid;white-space:nowrap;display:flex;align-items:center;gap:6px}
+.badge.live{background:rgba(34,201,138,.13);color:var(--good);border-color:var(--good)}
+.badge.sim{background:rgba(167,139,250,.13);color:var(--purple);border-color:var(--purple)}
+.dot{width:7px;height:7px;border-radius:50%;background:currentColor;animation:pulse 1.6s infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.8)}}
+.clock{font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.btn{background:var(--panel2);border:1px solid var(--border);color:var(--text);padding:6px 12px;border-radius:7px;font-size:12px;cursor:pointer;font-family:inherit;transition:.15s}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.btn.on{border-color:var(--warn);color:var(--warn)}
+.btn-icon{width:30px;height:30px;padding:0;display:flex;align-items:center;justify-content:center;font-size:14px}
+
+#sidebar-toggle{display:none}
+.overlay{display:none}
+
+.modal-overlay{position:fixed;inset:0;background:rgba(4,7,12,.6);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px}
+.modal-overlay.hidden{display:none}
+.modal{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:22px;width:100%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.modal h3{font-size:15px;margin-bottom:6px}
+.modal .modal-sub{font-size:12px;color:var(--muted);margin-bottom:16px;line-height:1.5}
+.modal label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:6px}
+.modal input[type=text]{width:100%;background:var(--panel2);border:1px solid var(--border);color:var(--text);padding:9px 11px;border-radius:8px;font-size:13px;font-family:inherit;margin-bottom:6px}
+.modal input[type=text]:focus{outline:none;border-color:var(--accent)}
+.modal .modal-status{font-size:11.5px;margin:4px 0 16px;min-height:15px}
+.modal .modal-status.ok{color:var(--good)}
+.modal .modal-status.err{color:var(--crit)}
+.modal-actions{display:flex;gap:8px;justify-content:flex-end}
+.modal-actions .btn{padding:7px 14px}
+
+#content{padding:20px 24px;overflow-y:auto;flex:1}
+.view{display:none}.view.active{display:block}
+
+.grid{display:grid;gap:14px;margin-bottom:14px}
+.g4{grid-template-columns:repeat(4,1fr)}
+.g3{grid-template-columns:repeat(3,1fr)}
+.g21{grid-template-columns:2fr 1fr}
+.g11{grid-template-columns:1fr 1fr}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px 18px;transition:border-color .2s ease}
+.panel:hover{border-color:#2a3646}
+.panel h3{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:12px;font-weight:600;display:flex;justify-content:space-between;align-items:center}
+.panel h3 .hint{text-transform:none;letter-spacing:0;color:var(--dim);font-weight:400;font-size:10.5px}
+
+.kpi .label{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.kpi .val{font-size:28px;font-weight:700;margin-top:6px;line-height:1;font-variant-numeric:tabular-nums}
+.kpi .unit{font-size:12.5px;color:var(--muted);font-weight:400;margin-left:4px}
+.kpi .sub{font-size:10.5px;color:var(--dim);margin-top:6px}
+.v-good{color:var(--good)}.v-warn{color:var(--warn)}.v-crit{color:var(--crit)}.v-accent{color:var(--accent)}.v-purple{color:var(--purple)}
+
+.bar-track{height:5px;background:#1b2534;border-radius:3px;margin-top:9px;overflow:hidden}
+.bar-fill{height:100%;background:var(--accent);border-radius:3px;transition:width .5s ease}
+
+canvas{display:block;width:100%}
+.cv-tall{height:230px}.cv-mid{height:190px}.cv-short{height:120px}
+
+.gauge-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4px 0}
+.gauge-label{font-size:11.5px;color:var(--muted);margin-top:8px;text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+.gauge-note{font-size:10.5px;color:var(--dim);margin-top:5px;text-align:center;line-height:1.5}
+.ring-txt{font-size:26px;font-weight:700;fill:#e9eff7;font-variant-numeric:tabular-nums}
+.ring-sub{font-size:10px;fill:#8695a8}
+
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{text-align:left;padding:8px 10px;color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--border);font-weight:600}
+td{padding:8px 10px;border-bottom:1px solid rgba(33,44,60,.5)}
+tr:last-child td{border-bottom:none}
+.mono{font-variant-numeric:tabular-nums}
+.r{text-align:right}
+
+.alerts{max-height:300px;overflow-y:auto}
+.alert{padding:9px 11px;border-radius:8px;margin-bottom:6px;font-size:12.5px;background:var(--panel2);border-left:3px solid var(--dim);line-height:1.45;animation:slidein .3s ease}
+@keyframes slidein{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:none}}
+.alert .ts{display:block;font-size:10.5px;color:var(--dim);margin-bottom:2px}
+.alert.critical{border-left-color:var(--crit)}
+.alert.warning{border-left-color:var(--warn)}
+.alert.info{border-left-color:var(--accent)}
+.pill{display:inline-block;padding:2px 8px;border-radius:11px;font-size:10px;font-weight:700;text-transform:uppercase}
+.pill.critical{background:rgba(255,77,109,.16);color:var(--crit)}
+.pill.warning{background:rgba(245,166,35,.16);color:var(--warn)}
+.pill.info{background:rgba(61,155,255,.16);color:var(--accent)}
+.empty{color:var(--dim);font-size:12.5px;padding:14px;text-align:center}
+.legend-note{font-size:10.5px;color:var(--dim);margin-top:8px;line-height:1.5}
+.swatch{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:middle}
+@media(max-width:1150px){.g4{grid-template-columns:repeat(2,1fr)}.g21,.g3,.g11{grid-template-columns:1fr}}
+
+@media(max-width:760px){
+  body{flex-direction:column;overflow-y:auto;overflow-x:hidden;height:auto;min-height:100%}
+  #sidebar{width:100%;flex-direction:row;align-items:center;padding:10px 12px;border-right:none;border-bottom:1px solid var(--border);overflow-x:auto;flex-shrink:0}
+  #sidebar .brand{border-bottom:none;border-right:1px solid var(--border);margin-bottom:0;padding:0 14px 0 0;flex-shrink:0}
+  #sidebar .brand span{display:none}
+  .nav-item{padding:8px 12px;border-left:none;border-bottom:3px solid transparent;white-space:nowrap;flex-shrink:0}
+  .nav-item.active{border-left-color:transparent;border-bottom-color:var(--accent)}
+  .side-foot{display:none}
+  #main{min-height:0}
+  #content{padding:14px}
+  .g4{grid-template-columns:repeat(2,1fr)}
+  #topbar{padding:10px 14px}
+  #topbar h2{font-size:14.5px;flex-basis:100%;order:-1}
+}
+@media(max-width:460px){
+  .g4{grid-template-columns:1fr}
+  .kpi .val{font-size:23px}
+}
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <div class="brand"><h1>DURAKNOT</h1><span>Production Intelligence</span></div>
+  <div class="nav-item active" data-view="overview"><span>Live Overview</span></div>
+  <div class="nav-item" data-view="oee"><span>OEE Analytics</span></div>
+  <div class="nav-item" data-view="quality"><span>Quality</span></div>
+  <div class="nav-item" data-view="alerts"><span>Alert Log</span><span class="cnt" id="nav-alert-cnt" style="display:none">0</span></div>
+  <div class="nav-item" data-view="history"><span>Shift History</span></div>
+  <div class="side-foot">A-1 Launchpad 2026<br>Automation &amp; Robotics<br>Case Study 2</div>
+</div>
+
+<div id="main">
+  <div id="topbar">
+    <h2 id="view-title">Live Overview</h2>
+    <span class="clock" id="clock">--:--:--</span>
+    <span class="badge sim" id="mode-badge"><span class="dot"></span><span id="mode-text">Simulation</span></span>
+    <button class="btn" id="btn-speed">1×</button>
+    <button class="btn" id="btn-pause">Pause</button>
+    <button class="btn" id="btn-end-shift" title="Log this session to Shift History, then reset">End Shift</button>
+    <button class="btn" id="btn-reset">Reset</button>
+    <button class="btn" id="btn-export">Export CSV</button>
+    <button class="btn btn-icon" id="btn-settings" title="Backend connection settings">⚙</button>
+  </div>
+
+  <div id="content">
+
+    <!-- ============== OVERVIEW ============== -->
+    <div class="view active" id="view-overview">
+      <div class="grid g4">
+        <div class="panel kpi">
+          <div class="label">Length Produced</div>
+          <div class="val v-accent" id="k-length">0<span class="unit">m</span></div>
+          <div class="bar-track"><div class="bar-fill" id="k-length-bar" style="width:0%"></div></div>
+          <div class="sub" id="k-length-sub">0% of 1,200 m order</div>
+        </div>
+        <div class="panel kpi">
+          <div class="label">Line Speed</div>
+          <div class="val" id="k-speed">0<span class="unit">m/min</span></div>
+          <div class="bar-track"><div class="bar-fill" id="k-speed-bar" style="width:0%;background:var(--good)"></div></div>
+          <div class="sub">Ideal rate 14.0 m/min</div>
+        </div>
+        <div class="panel kpi">
+          <div class="label">Defect Rate (60s)</div>
+          <div class="val v-good" id="k-defect">0<span class="unit">%</span></div>
+          <div class="bar-track"><div class="bar-fill" id="k-defect-bar" style="width:0%;background:var(--crit)"></div></div>
+          <div class="sub" id="k-defect-sub">0 defect events</div>
+        </div>
+        <div class="panel kpi">
+          <div class="label">Line Status</div>
+          <div class="val" id="k-status">—</div>
+          <div class="bar-track"><div class="bar-fill" id="k-up-bar" style="width:0%;background:var(--good)"></div></div>
+          <div class="sub" id="k-status-sub">Uptime 0% · 0 stoppages</div>
+        </div>
+      </div>
+
+      <div class="grid g21">
+        <div class="panel">
+          <h3>Production &amp; Speed <span class="hint">last 90 s · live</span></h3>
+          <canvas id="cv-trend" class="cv-tall"></canvas>
+        </div>
+        <div class="panel">
+          <h3>Overall Equipment Effectiveness</h3>
+          <div class="gauge-wrap">
+            <svg width="168" height="168" viewBox="0 0 180 180">
+              <circle cx="90" cy="90" r="72" fill="none" stroke="#1b2534" stroke-width="14"/>
+              <circle id="ring-oee" cx="90" cy="90" r="72" fill="none" stroke-width="14" stroke-linecap="round"
+                      transform="rotate(-90 90 90)" stroke-dasharray="0 452.4"/>
+              <text id="ring-oee-txt" class="ring-txt" x="90" y="88" text-anchor="middle">0%</text>
+              <text class="ring-sub" x="90" y="106" text-anchor="middle">OEE</text>
+            </svg>
+            <div class="gauge-note" id="oee-verdict">Collecting data…</div>
+          </div>
+          <div class="legend-note">World-class 85% · typical discrete manufacturing 60%</div>
+        </div>
+      </div>
+
+      <div class="grid g21">
+        <div class="panel">
+          <h3>Defect Events <span class="hint">red = flagged second</span></h3>
+          <canvas id="cv-defect" class="cv-short"></canvas>
+        </div>
+        <div class="panel">
+          <h3>Live Alerts</h3>
+          <div class="alerts" id="alerts-mini"><div class="empty">Monitoring…</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============== OEE ============== -->
+    <div class="view" id="view-oee">
+      <div class="grid g3">
+        <div class="panel gauge-wrap">
+          <svg width="146" height="146" viewBox="0 0 180 180">
+            <circle cx="90" cy="90" r="72" fill="none" stroke="#1b2534" stroke-width="14"/>
+            <circle id="ring-a" cx="90" cy="90" r="72" fill="none" stroke-width="14" stroke-linecap="round"
+                    transform="rotate(-90 90 90)" stroke-dasharray="0 452.4"/>
+            <text id="ring-a-txt" class="ring-txt" x="90" y="97" text-anchor="middle">0%</text>
+          </svg>
+          <div class="gauge-label">Availability</div>
+          <div class="gauge-note">Runtime ÷ planned time<br><span id="a-detail">—</span></div>
+        </div>
+        <div class="panel gauge-wrap">
+          <svg width="146" height="146" viewBox="0 0 180 180">
+            <circle cx="90" cy="90" r="72" fill="none" stroke="#1b2534" stroke-width="14"/>
+            <circle id="ring-p" cx="90" cy="90" r="72" fill="none" stroke-width="14" stroke-linecap="round"
+                    transform="rotate(-90 90 90)" stroke-dasharray="0 452.4"/>
+            <text id="ring-p-txt" class="ring-txt" x="90" y="97" text-anchor="middle">0%</text>
+          </svg>
+          <div class="gauge-label">Performance</div>
+          <div class="gauge-note">Actual ÷ ideal output<br><span id="p-detail">—</span></div>
+        </div>
+        <div class="panel gauge-wrap">
+          <svg width="146" height="146" viewBox="0 0 180 180">
+            <circle cx="90" cy="90" r="72" fill="none" stroke="#1b2534" stroke-width="14"/>
+            <circle id="ring-q" cx="90" cy="90" r="72" fill="none" stroke-width="14" stroke-linecap="round"
+                    transform="rotate(-90 90 90)" stroke-dasharray="0 452.4"/>
+            <text id="ring-q-txt" class="ring-txt" x="90" y="97" text-anchor="middle">0%</text>
+          </svg>
+          <div class="gauge-label">Quality</div>
+          <div class="gauge-note">Good ÷ total output<br><span id="q-detail">—</span></div>
+        </div>
+      </div>
+
+      <div class="grid g11">
+        <div class="panel">
+          <h3>OEE Trend <span class="hint">dashed = 85% world-class</span></h3>
+          <canvas id="cv-oee" class="cv-mid"></canvas>
+        </div>
+        <div class="panel">
+          <h3>Loss Breakdown <span class="hint">% of theoretical max</span></h3>
+          <canvas id="cv-loss" class="cv-mid"></canvas>
+          <div class="legend-note">Longest bar = highest-priority improvement target.</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>Calculation Detail <span class="hint">live inputs</span></h3>
+        <table><thead><tr><th>Component</th><th>Formula</th><th>Inputs</th><th class="r">Value</th></tr></thead>
+        <tbody id="oee-tbody"><tr><td colspan="4" class="empty">Collecting data…</td></tr></tbody></table>
+        <div class="legend-note">OEE = Availability × Performance × Quality. Ideal rate calibrated at 14.0 m/min.</div>
+      </div>
+    </div>
+
+    <!-- ============== QUALITY ============== -->
+    <div class="view" id="view-quality">
+      <div class="grid g4">
+        <div class="panel kpi"><div class="label">Total Defects</div><div class="val v-crit" id="q-total">0</div><div class="sub">this shift</div></div>
+        <div class="panel kpi"><div class="label">Good Output</div><div class="val v-good" id="q-good">0<span class="unit">m</span></div><div class="sub" id="q-good-sub">—</div></div>
+        <div class="panel kpi"><div class="label">Scrap / Rework</div><div class="val v-warn" id="q-bad">0<span class="unit">m</span></div><div class="sub">defect-affected length</div></div>
+        <div class="panel kpi"><div class="label">Top Defect Cause</div><div class="val" id="q-top" style="font-size:17px;padding-top:6px">—</div><div class="sub" id="q-top-sub">—</div></div>
+      </div>
+      <div class="grid g11">
+        <div class="panel">
+          <h3>Defect Pareto <span class="hint">bars = count · line = cumulative %</span></h3>
+          <canvas id="cv-pareto" class="cv-tall"></canvas>
+          <div class="legend-note">Classic 80/20 view — the first bars crossing 80% cumulative are where corrective action pays off most.</div>
+        </div>
+        <div class="panel">
+          <h3>Defect Rate Trend <span class="hint">rolling 60 s window</span></h3>
+          <canvas id="cv-drate" class="cv-tall"></canvas>
+          <div class="legend-note">Sustained periods above 20% trigger a quality alert.</div>
+        </div>
+      </div>
+      <div class="panel">
+        <h3>Defect Breakdown by Category</h3>
+        <table><thead><tr><th>Category</th><th>Count</th><th>Share</th><th class="r">Cumulative</th></tr></thead>
+        <tbody id="pareto-tbody"><tr><td colspan="4" class="empty">No defects recorded yet</td></tr></tbody></table>
+      </div>
+    </div>
+
+    <!-- ============== ALERTS ============== -->
+    <div class="view" id="view-alerts">
+      <div class="grid g4">
+        <div class="panel kpi"><div class="label">Total Alerts</div><div class="val" id="a-total">0</div></div>
+        <div class="panel kpi"><div class="label">Critical</div><div class="val v-crit" id="a-crit">0</div></div>
+        <div class="panel kpi"><div class="label">Warnings</div><div class="val v-warn" id="a-warn">0</div></div>
+        <div class="panel kpi"><div class="label">Stoppages</div><div class="val" id="a-stops">0</div><div class="sub" id="a-downtime">0 s downtime</div></div>
+      </div>
+      <div class="panel">
+        <h3>Full Alert Log</h3>
+        <table><thead><tr><th style="width:100px">Time</th><th style="width:96px">Level</th><th>Message</th></tr></thead>
+        <tbody id="alert-tbody"><tr><td colspan="3" class="empty">No alerts recorded yet</td></tr></tbody></table>
+      </div>
+    </div>
+
+    <!-- ============== SHIFT HISTORY ============== -->
+    <div class="view" id="view-history">
+      <div class="grid g4">
+        <div class="panel kpi"><div class="label">Shifts Logged</div><div class="val" id="h-count">0</div><div class="sub" id="h-source">local storage</div></div>
+        <div class="panel kpi"><div class="label">Best OEE</div><div class="val v-good" id="h-best">—</div><div class="sub" id="h-best-sub">—</div></div>
+        <div class="panel kpi"><div class="label">Avg OEE</div><div class="val v-accent" id="h-avg">—</div><div class="sub">across logged shifts</div></div>
+        <div class="panel kpi"><div class="label">Total Length Logged</div><div class="val" id="h-length">0<span class="unit">m</span></div><div class="sub">all shifts combined</div></div>
+      </div>
+      <div class="panel">
+        <h3>OEE Across Shifts <span class="hint">most recent on the right</span></h3>
+        <canvas id="cv-shift-oee" class="cv-mid"></canvas>
+        <div class="legend-note">Use <b>End Shift</b> in the top bar to log the current session here, then start a fresh one. Historical trend analysis and shift reporting per the case study brief.</div>
+      </div>
+      <div class="panel">
+        <h3>Shift Log</h3>
+        <table><thead><tr><th>Ended</th><th>Duration</th><th>Length</th><th>Avail.</th><th>Perf.</th><th>Qual.</th><th class="r">OEE</th></tr></thead>
+        <tbody id="history-tbody"><tr><td colspan="7" class="empty">No shifts logged yet — click "End Shift" in the top bar.</td></tr></tbody></table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="modal-overlay hidden" id="settings-modal">
+  <div class="modal">
+    <h3>Backend connection</h3>
+    <div class="modal-sub">This dashboard runs a built-in simulator by default. Point it at a real Flask backend (see <code>backend/README.md</code>) to stream live ESP32 sensor data and shift history instead.</div>
+    <label for="settings-url">Backend base URL</label>
+    <input type="text" id="settings-url" placeholder="http://192.168.1.50:5000">
+    <div class="modal-status" id="settings-status"></div>
+    <div class="modal-actions">
+      <button class="btn" id="settings-clear">Use Simulator</button>
+      <button class="btn" id="settings-cancel">Cancel</button>
+      <button class="btn on" id="settings-save">Save &amp; Connect</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* =====================================================================
+   DURAKNOT PRODUCTION INTELLIGENCE DASHBOARD
+   ZERO DEPENDENCIES — no CDN, no libraries, no build step, works offline
+   straight from file://. All charts are hand-drawn on <canvas>.
+
+   Data source: built-in simulation engine by default. If the Flask
+   backend (backend/app.py) is reachable, it polls the real REST API
+   instead and the badge flips to "Live Hardware".
+   ===================================================================== */
+
+/* ---------------- CONFIG ---------------- */
+var IDEAL_RATE   = 14.0;    // m/min — calibrated ideal cycle rate
+var ORDER_TARGET = 1200;    // m — current production order quantity
+var RING_CIRC    = 2 * Math.PI * 72;   // 452.39
+var SEED_TICKS   = 1200;    // pre-fill 20 min of line history so the board opens populated
+var C = { text:'#e9eff7', muted:'#8695a8', dim:'#5a6777', grid:'#1a2432',
+          accent:'#3d9bff', good:'#22c98a', warn:'#f5a623', crit:'#ff4d6d', purple:'#a78bfa' };
+
+var DEFECT_TYPES = [
+  { name:'Weld quality',       w:0.38, color:'#ff4d6d' },
+  { name:'Mesh spacing',       w:0.27, color:'#f5a623' },
+  { name:'Coating uniformity', w:0.21, color:'#a78bfa' },
+  { name:'Wire tension',       w:0.14, color:'#3d9bff' }
+];
+
+/* ---------------- STATE ---------------- */
+var paused = false, liveMode = false, speedMult = 1, timer = null;
+var state = {
+  plannedSec:0, runSec:0, downSec:0,
+  totalLength:0, defectEvents:0, stoppages:0, ticks:0,
+  status:'RUNNING', lastStatus:'RUNNING', speed:0,
+  recent:[],            // last 90 readings  {speed_mpm, defect, status, length_m}
+  oeeSeries:[],         // rolling OEE %
+  drateSeries:[],       // rolling defect-rate %
+  defectsByType:{},
+  alerts:[],
+  _lastDefectAlert:0, _lastSpeedAlert:0
+};
+DEFECT_TYPES.forEach(function(d){ state.defectsByType[d.name] = 0; });
+
+/* Virtual clock: advances exactly 1 s per tick. Using wall-clock time here
+   would break the pre-seed (all seed ticks land in the same millisecond, so
+   any simulated stoppage would never expire). */
+var seeding = false, seedRemaining = 0;
+function nowMs(){ return seeding ? Date.now() - seedRemaining*1000 : Date.now(); }
+
+/* ---------------- SIMULATION ENGINE ---------------- */
+var sim = {
+  base:12.0, t:0, stopUntil:0, slowUntil:0, status:'RUNNING', total:0, defects:0,
+  tick:function(){
+    var now = ++this.t;   // virtual seconds
+    if(this.status==='RUNNING' && Math.random()<0.012){ this.stopUntil=now+(4+Math.random()*5); this.status='STOPPED'; }
+    if(this.status==='RUNNING' && now>=this.slowUntil && Math.random()<0.018){ this.slowUntil=now+(5+Math.random()*5); }
+    var speed;
+    if(this.status==='STOPPED'){ speed=0; if(now>=this.stopUntil) this.status='RUNNING'; }
+    else if(now<this.slowUntil){ speed=this.base*(0.30+Math.random()*0.22); }
+    else { speed=this.base+(Math.random()*2.4-1.2); }
+    if(speed<0) speed=0;
+    this.total += speed/60;
+    var p = Math.random()<0.02 ? 0.40 : 0.03;
+    var defect = (this.status==='RUNNING' && Math.random()<p) ? 1 : 0;
+    var type = null;
+    if(defect){
+      this.defects++;
+      var r=Math.random(), acc=0;
+      for(var i=0;i<DEFECT_TYPES.length;i++){ acc+=DEFECT_TYPES[i].w; if(r<=acc){ type=DEFECT_TYPES[i].name; break; } }
+      if(!type) type=DEFECT_TYPES[0].name;
+    }
+    return { length_m:+this.total.toFixed(2), speed_mpm:+speed.toFixed(2),
+             defect:defect, defect_type:type, defect_total:this.defects, status:this.status };
+  }
+};
+
+/* ---------------- OEE MATH ---------------- */
+function computeOEE(){
+  var planned = state.plannedSec;
+  if(planned < 5) return null;
+  var runtime = state.runSec;
+  var availability = planned>0 ? runtime/planned : 0;
+  var idealOutput  = (runtime/60) * IDEAL_RATE;
+  var performance  = idealOutput>0 ? Math.min(state.totalLength/idealOutput, 1) : 0;
+  var avgRate   = runtime>0 ? state.totalLength/(runtime/60) : 0;
+  var badLength = Math.min(state.defectEvents*(avgRate/60), state.totalLength);
+  var quality   = state.totalLength>0 ? (state.totalLength-badLength)/state.totalLength : 0;
+  return { availability:availability, performance:performance, quality:quality,
+           oee:availability*performance*quality,
+           runtime:runtime, planned:planned, idealOutput:idealOutput,
+           badLength:badLength, avgRate:avgRate };
+}
+
+/* ---------------- CANVAS HELPERS ---------------- */
+function setupCanvas(cv){
+  var dpr = window.devicePixelRatio || 1;
+  var w = cv.clientWidth, h = cv.clientHeight;
+  if(w===0 || h===0) return null;                 // hidden view — skip
+  if(cv.width !== w*dpr || cv.height !== h*dpr){ cv.width = w*dpr; cv.height = h*dpr; }
+  var ctx = cv.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,w,h);
+  return { ctx:ctx, w:w, h:h };
+}
+function niceMax(v){
+  if(v<=0) return 1;
+  var mag = Math.pow(10, Math.floor(Math.log10(v)));
+  var n = v/mag;
+  var step = n<=1?1 : n<=2?2 : n<=5?5 : 10;
+  return step*mag;
+}
+function gridAndAxis(ctx,box,yMax,yLabelFmt,yMin){
+  yMin = yMin || 0;
+  ctx.strokeStyle=C.grid; ctx.lineWidth=1;
+  ctx.fillStyle=C.dim; ctx.font='10px Segoe UI'; ctx.textAlign='right'; ctx.textBaseline='middle';
+  for(var i=0;i<=4;i++){
+    var y = box.t + (box.h*i/4);
+    ctx.beginPath(); ctx.moveTo(box.l,y+.5); ctx.lineTo(box.l+box.w,y+.5); ctx.stroke();
+    var val = yMax - (yMax-yMin)*i/4;
+    ctx.fillText(yLabelFmt(val), box.l-7, y);
+  }
+}
+function drawSeries(ctx,box,data,max,color,fill,min){
+  if(data.length<2) return;
+  min = min || 0;
+  var n=data.length;
+  var X=function(i){ return box.l + box.w*(i/(n-1)); };
+  var Y=function(v){ var t=(v-min)/(max-min||1); if(t<0)t=0; if(t>1)t=1; return box.t + box.h*(1-t); };
+  if(fill){
+    var g=ctx.createLinearGradient(0,box.t,0,box.t+box.h);
+    g.addColorStop(0,color+'40'); g.addColorStop(1,color+'00');
+    ctx.beginPath(); ctx.moveTo(X(0),box.t+box.h);
+    for(var i=0;i<n;i++) ctx.lineTo(X(i),Y(data[i]));
+    ctx.lineTo(X(n-1),box.t+box.h); ctx.closePath(); ctx.fillStyle=g; ctx.fill();
+  }
+  ctx.beginPath();
+  for(var j=0;j<n;j++){ var x=X(j), y=Y(data[j]); if(j===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); }
+  ctx.strokeStyle=color; ctx.lineWidth=2; ctx.lineJoin='round'; ctx.stroke();
+  // live head dot
+  ctx.beginPath(); ctx.arc(X(n-1),Y(data[n-1]),3.2,0,Math.PI*2);
+  ctx.fillStyle=color; ctx.fill();
+}
+function legend(ctx,box,items){
+  ctx.font='10.5px Segoe UI'; ctx.textAlign='left'; ctx.textBaseline='middle';
+  var x=box.l;
+  items.forEach(function(it){
+    ctx.fillStyle=it.color; ctx.fillRect(x,box.t-13,9,9);
+    ctx.fillStyle=C.muted; ctx.fillText(it.label,x+13,box.t-8.5);
+    x += ctx.measureText(it.label).width + 30;
+  });
+}
+
+/* ---------------- CHART RENDERERS ---------------- */
+function drawTrend(){
+  var cv=document.getElementById('cv-trend'); var s=setupCanvas(cv); if(!s) return;
+  var ctx=s.ctx, box={l:46,t:22,w:s.w-46-46,h:s.h-22-20};
+  var lens=state.recent.map(function(r){return r.length_m;});
+  var sps =state.recent.map(function(r){return r.speed_mpm;});
+  if(lens.length<2){ ctx.fillStyle=C.dim; ctx.font='12px Segoe UI'; ctx.textAlign='center';
+                     ctx.fillText('waiting for data…',s.w/2,s.h/2); return; }
+  var lMin=Math.min.apply(null,lens), lMax=Math.max.apply(null,lens);
+  if(lMax-lMin<1) lMax=lMin+1;
+  gridAndAxis(ctx,box,lMax,function(v){return Math.round(v)+'m';},lMin);
+  // right axis (speed)
+  var sMax=niceMax(Math.max(IDEAL_RATE, Math.max.apply(null,sps)));
+  ctx.fillStyle=C.dim; ctx.font='10px Segoe UI'; ctx.textAlign='left'; ctx.textBaseline='middle';
+  for(var i=0;i<=4;i++){ ctx.fillText((sMax-sMax*i/4).toFixed(0), box.l+box.w+7, box.t+box.h*i/4); }
+  drawSeries(ctx,box,lens,lMax,C.accent,true,lMin);
+  drawSeries(ctx,box,sps,sMax,C.good,false,0);
+  legend(ctx,box,[{label:'Length (m)',color:C.accent},{label:'Speed (m/min)',color:C.good}]);
+  ctx.fillStyle=C.dim; ctx.font='10px Segoe UI'; ctx.textAlign='center'; ctx.textBaseline='top';
+  ctx.fillText('-90 s',box.l,box.t+box.h+6);
+  ctx.fillText('now',box.l+box.w,box.t+box.h+6);
+}
+function drawDefectStrip(){
+  var cv=document.getElementById('cv-defect'); var s=setupCanvas(cv); if(!s) return;
+  var ctx=s.ctx, box={l:34,t:12,w:s.w-34-12,h:s.h-12-22};
+  gridAndAxis(ctx,box,1,function(v){return v.toFixed(0);});
+  var d=state.recent; if(!d.length) return;
+  var bw=box.w/d.length;
+  for(var i=0;i<d.length;i++){
+    if(d[i].defect){ ctx.fillStyle=C.crit; ctx.fillRect(box.l+i*bw, box.t, Math.max(bw-1,1.5), box.h); }
+    else if(d[i].status==='STOPPED'){ ctx.fillStyle='rgba(255,77,109,.14)'; ctx.fillRect(box.l+i*bw, box.t, Math.max(bw-1,1.5), box.h); }
+  }
+  ctx.fillStyle=C.dim; ctx.font='10px Segoe UI'; ctx.textAlign='center'; ctx.textBaseline='top';
+  ctx.fillText('-90 s',box.l,box.t+box.h+6); ctx.fillText('now',box.l+box.w,box.t+box.h+6);
+  ctx.textAlign='left';
+  ctx.fillText('solid = defect · shaded = stopped', box.l+14, box.t+box.h+6);
+}
+function drawOeeTrend(){
+  var cv=document.getElementById('cv-oee'); var s=setupCanvas(cv); if(!s) return;
+  var ctx=s.ctx, box={l:38,t:22,w:s.w-38-14,h:s.h-22-20};
+  gridAndAxis(ctx,box,100,function(v){return v.toFixed(0)+'%';});
+  // 85% benchmark
+  var yb = box.t + box.h*(1-0.85);
+  ctx.save(); ctx.setLineDash([5,5]); ctx.strokeStyle=C.good; ctx.lineWidth=1.3;
+  ctx.beginPath(); ctx.moveTo(box.l,yb); ctx.lineTo(box.l+box.w,yb); ctx.stroke(); ctx.restore();
+  if(state.oeeSeries.length<2){ ctx.fillStyle=C.dim; ctx.font='12px Segoe UI'; ctx.textAlign='center';
+    ctx.fillText('building OEE history…',s.w/2,s.h/2); return; }
+  drawSeries(ctx,box,state.oeeSeries,100,C.purple,true,0);
+  legend(ctx,box,[{label:'OEE %',color:C.purple},{label:'85% target',color:C.good}]);
+}
+function drawLoss(){
+  var cv=document.getElementById('cv-loss'); var s=setupCanvas(cv); if(!s) return;
+  var ctx=s.ctx; var o=computeOEE();
+  if(!o){ ctx.fillStyle=C.dim; ctx.font='12px Segoe UI'; ctx.textAlign='center';
+          ctx.fillText('collecting…',s.w/2,s.h/2); return; }
+  var A=o.availability*100, P=o.performance*100, Q=o.quality*100, O=o.oee*100;
+  var rows=[
+    {label:'Availability loss', val:100-A,        color:C.crit},
+    {label:'Performance loss',  val:A-(A*o.performance), color:C.warn},
+    {label:'Quality loss',      val:(A*o.performance)-O, color:C.purple},
+    {label:'Actual OEE',        val:O,            color:C.good}
+  ];
+  var box={l:112,t:10,w:s.w-112-42,h:s.h-10-24};
+  var bh=box.h/rows.length;
+  ctx.font='11px Segoe UI'; ctx.textBaseline='middle';
+  rows.forEach(function(r,i){
+    var y=box.t+i*bh+bh*0.16, hh=bh*0.68;
+    ctx.fillStyle='#1b2534'; ctx.fillRect(box.l,y,box.w,hh);
+    ctx.fillStyle=r.color;   ctx.fillRect(box.l,y,box.w*Math.max(r.val,0)/100,hh);
+    ctx.fillStyle=C.muted; ctx.textAlign='right'; ctx.fillText(r.label,box.l-9,y+hh/2);
+    ctx.fillStyle=C.text;  ctx.textAlign='left';  ctx.fillText(r.val.toFixed(1)+'%',box.l+box.w+7,y+hh/2);
+  });
+  ctx.fillStyle=C.dim; ctx.font='10px Segoe UI'; ctx.textAlign='left'; ctx.textBaseline='top';
+  ctx.fillText('0%',box.l,box.t+box.h+5);
+  ctx.textAlign='right'; ctx.fillText('100%',box.l+box.w,box.t+box.h+5);
+}
+function paretoData(){
+  var arr=DEFECT_TYPES.map(function(d){ return {name:d.name,count:state.defectsByType[d.name],color:d.color}; });
+  arr.sort(function(a,b){return b.count-a.count;});
+  var total=arr.reduce(function(s,x){return s+x.count;},0);
+  var acc=0;
+  arr.forEach(function(x){ acc+=x.count; x.share=total?x.count/total:0; x.cum=total?acc/total:0; });
+  return {rows:arr,total:total};
+}
+function drawPareto(){
+  var cv=document.getElementById('cv-pareto'); var s=setupCanvas(cv); if(!s) return;
+  var ctx=s.ctx, pd=paretoData();
+  var box={l:38,t:18,w:s.w-38-40,h:s.h-18-34};
+  if(!pd.total){ ctx.fillStyle=C.dim; ctx.font='12px Segoe UI'; ctx.textAlign='center';
+                 ctx.fillText('no defects recorded yet',s.w/2,s.h/2); return; }
+  var maxC=niceMax(pd.rows[0].count);
+  gridAndAxis(ctx,box,maxC,function(v){return Math.round(v);});
+  ctx.fillStyle=C.dim; ctx.font='10px Segoe UI'; ctx.textAlign='left'; ctx.textBaseline='middle';
+  for(var i=0;i<=4;i++){ ctx.fillText((100-100*i/4).toFixed(0)+'%', box.l+box.w+7, box.t+box.h*i/4); }
+  var bw=box.w/pd.rows.length;
+  pd.rows.forEach(function(r,i){
+    var hh=box.h*(r.count/maxC);
+    ctx.fillStyle=r.color;
+    ctx.fillRect(box.l+i*bw+bw*0.18, box.t+box.h-hh, bw*0.64, hh);
+    ctx.fillStyle=C.text; ctx.font='10.5px Segoe UI'; ctx.textAlign='center'; ctx.textBaseline='bottom';
+    if(r.count) ctx.fillText(r.count, box.l+i*bw+bw/2, box.t+box.h-hh-3);
+    ctx.fillStyle=C.muted; ctx.font='9.5px Segoe UI'; ctx.textBaseline='top';
+    var words=r.name.split(' ');
+    ctx.fillText(words[0], box.l+i*bw+bw/2, box.t+box.h+5);
+    if(words[1]) ctx.fillText(words[1], box.l+i*bw+bw/2, box.t+box.h+16);
+  });
+  // cumulative line
+  ctx.beginPath();
+  pd.rows.forEach(function(r,i){
+    var x=box.l+i*bw+bw/2, y=box.t+box.h*(1-r.cum);
+    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  });
+  ctx.strokeStyle=C.accent; ctx.lineWidth=2; ctx.stroke();
+  pd.rows.forEach(function(r,i){
+    var x=box.l+i*bw+bw/2, y=box.t+box.h*(1-r.cum);
+    ctx.beginPath(); ctx.arc(x,y,3,0,Math.PI*2); ctx.fillStyle=C.accent; ctx.fill();
+  });
+  // 80% line
+  var y80=box.t+box.h*(1-0.8);
+  ctx.save(); ctx.setLineDash([4,4]); ctx.strokeStyle=C.warn; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(box.l,y80); ctx.lineTo(box.l+box.w,y80); ctx.stroke(); ctx.restore();
+}
+function drawDrate(){
+  var cv=document.getElementById('cv-drate'); var s=setupCanvas(cv); if(!s) return;
+  var ctx=s.ctx, box={l:40,t:20,w:s.w-40-14,h:s.h-20-20};
+  var maxY=Math.max(30, niceMax(Math.max.apply(null, state.drateSeries.concat([10]))));
+  gridAndAxis(ctx,box,maxY,function(v){return v.toFixed(0)+'%';});
+  var yt=box.t+box.h*(1-20/maxY);
+  ctx.save(); ctx.setLineDash([5,5]); ctx.strokeStyle=C.warn; ctx.lineWidth=1.2;
+  ctx.beginPath(); ctx.moveTo(box.l,yt); ctx.lineTo(box.l+box.w,yt); ctx.stroke(); ctx.restore();
+  if(state.drateSeries.length<2){ ctx.fillStyle=C.dim; ctx.font='12px Segoe UI'; ctx.textAlign='center';
+    ctx.fillText('collecting…',s.w/2,s.h/2); return; }
+  drawSeries(ctx,box,state.drateSeries,maxY,C.crit,true,0);
+  legend(ctx,box,[{label:'Defect rate %',color:C.crit},{label:'20% alert threshold',color:C.warn}]);
+}
+
+/* ---------------- ALERTS ---------------- */
+function addAlert(level,msg){
+  state.alerts.unshift({ts:nowMs(),level:level,message:msg});
+  if(state.alerts.length>400) state.alerts.pop();
+}
+function checkAlerts(r){
+  if(r.status==='STOPPED' && state.lastStatus==='RUNNING'){
+    state.stoppages++; addAlert('critical','Line STOPPED — possible jam or changeover. Downtime clock running.');
+  }
+  if(r.status==='RUNNING' && state.lastStatus==='STOPPED'){ addAlert('info','Line RESUMED production.'); }
+  state.lastStatus=r.status;
+
+  if(state.recent.length>=20){
+    var dr=state.recent.reduce(function(s,x){return s+x.defect;},0)/state.recent.length;
+    if(dr>0.20 && nowMs()-state._lastDefectAlert>15000){
+      state._lastDefectAlert=nowMs();
+      addAlert('warning','High defect rate: '+(dr*100).toFixed(0)+'% of last '+state.recent.length+'s flagged — inspect weld quality / mesh spacing.');
+    }
+  }
+  if(state.recent.length>=15 && r.status==='RUNNING'){
+    var sp=state.recent.filter(function(x){return x.status==='RUNNING';}).map(function(x){return x.speed_mpm;});
+    if(sp.length){
+      var avg=sp.reduce(function(a,b){return a+b;},0)/sp.length;
+      if(avg>1 && r.speed_mpm<avg*0.5 && nowMs()-state._lastSpeedAlert>15000){
+        state._lastSpeedAlert=nowMs();
+        addAlert('warning','Speed dropped to '+r.speed_mpm.toFixed(1)+' m/min (avg '+avg.toFixed(1)+') — possible line slowdown.');
+      }
+    }
+  }
+}
+function renderAlerts(){
+  var mini=document.getElementById('alerts-mini');
+  mini.innerHTML = state.alerts.length
+    ? state.alerts.slice(0,10).map(function(a){
+        return '<div class="alert '+a.level+'"><span class="ts">'+new Date(a.ts).toLocaleTimeString()+'</span>'+a.message+'</div>';
+      }).join('')
+    : '<div class="empty">Monitoring… no alerts</div>';
+  var tb=document.getElementById('alert-tbody');
+  tb.innerHTML = state.alerts.length
+    ? state.alerts.map(function(a){
+        return '<tr><td class="mono">'+new Date(a.ts).toLocaleTimeString()+'</td><td><span class="pill '+a.level+'">'+a.level+'</span></td><td>'+a.message+'</td></tr>';
+      }).join('')
+    : '<tr><td colspan="3" class="empty">No alerts recorded yet</td></tr>';
+
+  var crit=state.alerts.filter(function(a){return a.level==='critical';}).length;
+  var warn=state.alerts.filter(function(a){return a.level==='warning';}).length;
+  document.getElementById('a-total').textContent=state.alerts.length;
+  document.getElementById('a-crit').textContent=crit;
+  document.getElementById('a-warn').textContent=warn;
+  document.getElementById('a-stops').textContent=state.stoppages;
+  document.getElementById('a-downtime').textContent=state.downSec+' s downtime';
+  var nc=document.getElementById('nav-alert-cnt');
+  if(crit){ nc.style.display='inline-block'; nc.textContent=crit; } else { nc.style.display='none'; }
+}
+
+/* ---------------- GAUGES ---------------- */
+function colorFor(p){ return p>=85?C.good : p>=60?C.warn : C.crit; }
+function setRing(id,txtId,pct){
+  var el=document.getElementById(id); if(!el) return;
+  var v=Math.max(0,Math.min(100,pct));
+  el.setAttribute('stroke-dasharray',(v/100*RING_CIRC).toFixed(2)+' '+RING_CIRC.toFixed(2));
+  el.setAttribute('stroke',colorFor(v));
+  el.style.transition='stroke-dasharray .5s ease';
+  document.getElementById(txtId).textContent=pct.toFixed(1)+'%';
+}
+
+/* ---------------- INGEST ---------------- */
+function handleReading(r){
+  state.ticks++;
+  state.plannedSec++;
+  if(r.status==='RUNNING') state.runSec++; else state.downSec++;
+  state.totalLength = r.length_m;
+  state.defectEvents = r.defect_total;
+  state.status = r.status;
+  state.speed  = r.speed_mpm;
+  if(r.defect && r.defect_type && state.defectsByType[r.defect_type]!==undefined){
+    state.defectsByType[r.defect_type]++;
+  }
+  state.recent.push(r);
+  if(state.recent.length>90) state.recent.shift();
+
+  var dr = state.recent.reduce(function(s,x){return s+x.defect;},0)/state.recent.length;
+  state.drateSeries.push(+(dr*100).toFixed(2));
+  if(state.drateSeries.length>90) state.drateSeries.shift();
+
+  var o=computeOEE();
+  if(o){ state.oeeSeries.push(+(o.oee*100).toFixed(2)); if(state.oeeSeries.length>90) state.oeeSeries.shift(); }
+
+  checkAlerts(r);
+}
+
+/* ---------------- RENDER ---------------- */
+var currentView='overview';
+function renderKPIs(){
+  var r = state.recent[state.recent.length-1]; if(!r) return;
+  var pctTarget = Math.min(state.totalLength/ORDER_TARGET*100,100);
+  document.getElementById('k-length').innerHTML = Math.round(state.totalLength).toLocaleString()+'<span class="unit">m</span>';
+  document.getElementById('k-length-bar').style.width = pctTarget+'%';
+  document.getElementById('k-length-sub').textContent = pctTarget.toFixed(1)+'% of 1,200 m order';
+
+  var sEl=document.getElementById('k-speed');
+  sEl.innerHTML=r.speed_mpm.toFixed(1)+'<span class="unit">m/min</span>';
+  sEl.className='val '+(r.speed_mpm>=IDEAL_RATE*0.8?'v-good':r.speed_mpm>0?'v-warn':'v-crit');
+  document.getElementById('k-speed-bar').style.width=Math.min(r.speed_mpm/IDEAL_RATE*100,100)+'%';
+
+  var dr=state.recent.reduce(function(s,x){return s+x.defect;},0)/state.recent.length;
+  var dEl=document.getElementById('k-defect');
+  dEl.innerHTML=(dr*100).toFixed(1)+'<span class="unit">%</span>';
+  dEl.className='val '+(dr<0.05?'v-good':dr<0.20?'v-warn':'v-crit');
+  document.getElementById('k-defect-bar').style.width=Math.min(dr*100*3,100)+'%';
+  document.getElementById('k-defect-sub').textContent=state.defectEvents+' defect events this shift';
+
+  var stEl=document.getElementById('k-status');
+  stEl.textContent=r.status;
+  stEl.className='val '+(r.status==='RUNNING'?'v-good':'v-crit');
+  var up=state.runSec/Math.max(1,state.plannedSec)*100;
+  document.getElementById('k-up-bar').style.width=up+'%';
+  document.getElementById('k-status-sub').textContent='Uptime '+up.toFixed(1)+'% · '+state.stoppages+' stoppages';
+}
+function renderOEE(){
+  var o=computeOEE(); if(!o) return;
+  var A=o.availability*100,P=o.performance*100,Q=o.quality*100,O=o.oee*100;
+  setRing('ring-oee','ring-oee-txt',O);
+  setRing('ring-a','ring-a-txt',A);
+  setRing('ring-p','ring-p-txt',P);
+  setRing('ring-q','ring-q-txt',Q);
+  document.getElementById('oee-verdict').textContent =
+    O>=85?'World-class performance' : O>=60?'Typical — improvement headroom' : 'Below benchmark — action needed';
+  document.getElementById('a-detail').textContent=o.runtime+' s run / '+o.planned+' s planned';
+  document.getElementById('p-detail').textContent=state.totalLength.toFixed(0)+' m of '+o.idealOutput.toFixed(0)+' m ideal';
+  document.getElementById('q-detail').textContent=o.badLength.toFixed(1)+' m defect-affected';
+  document.getElementById('oee-tbody').innerHTML =
+    '<tr><td><b>Availability</b></td><td>Runtime ÷ Planned time</td><td class="mono">'+o.runtime+' s ÷ '+o.planned+' s</td><td class="mono r" style="color:'+colorFor(A)+'"><b>'+A.toFixed(1)+'%</b></td></tr>'+
+    '<tr><td><b>Performance</b></td><td>Actual ÷ (Runtime × Ideal rate)</td><td class="mono">'+state.totalLength.toFixed(1)+' m ÷ '+o.idealOutput.toFixed(1)+' m</td><td class="mono r" style="color:'+colorFor(P)+'"><b>'+P.toFixed(1)+'%</b></td></tr>'+
+    '<tr><td><b>Quality</b></td><td>Good ÷ Total output</td><td class="mono">'+(state.totalLength-o.badLength).toFixed(1)+' m ÷ '+state.totalLength.toFixed(1)+' m</td><td class="mono r" style="color:'+colorFor(Q)+'"><b>'+Q.toFixed(1)+'%</b></td></tr>'+
+    '<tr style="background:rgba(167,139,250,.07)"><td><b>OEE</b></td><td>A × P × Q</td><td class="mono">'+A.toFixed(1)+'% × '+P.toFixed(1)+'% × '+Q.toFixed(1)+'%</td><td class="mono r" style="color:'+colorFor(O)+'"><b>'+O.toFixed(1)+'%</b></td></tr>';
+}
+function renderQuality(){
+  var o=computeOEE(); var pd=paretoData();
+  document.getElementById('q-total').textContent=state.defectEvents;
+  var bad=o?o.badLength:0;
+  document.getElementById('q-good').innerHTML=Math.round(state.totalLength-bad).toLocaleString()+'<span class="unit">m</span>';
+  document.getElementById('q-good-sub').textContent=o?((o.quality*100).toFixed(1)+'% quality rate'):'—';
+  document.getElementById('q-bad').innerHTML=bad.toFixed(1)+'<span class="unit">m</span>';
+  if(pd.total){
+    document.getElementById('q-top').textContent=pd.rows[0].name;
+    document.getElementById('q-top-sub').textContent=pd.rows[0].count+' events · '+(pd.rows[0].share*100).toFixed(0)+'% of all defects';
+    document.getElementById('pareto-tbody').innerHTML=pd.rows.map(function(r){
+      return '<tr><td><span class="swatch" style="background:'+r.color+'"></span>'+r.name+'</td>'+
+             '<td class="mono">'+r.count+'</td><td class="mono">'+(r.share*100).toFixed(1)+'%</td>'+
+             '<td class="mono r">'+(r.cum*100).toFixed(1)+'%</td></tr>';
+    }).join('');
+  }
+}
+function renderCharts(){
+  if(currentView==='overview'){ drawTrend(); drawDefectStrip(); }
+  else if(currentView==='oee'){ drawOeeTrend(); drawLoss(); }
+  else if(currentView==='quality'){ drawPareto(); drawDrate(); }
+  else if(currentView==='history'){ drawShiftOee(); }
+}
+function renderAll(){
+  renderKPIs(); renderOEE(); renderQuality(); renderAlerts(); renderHistory(); renderCharts();
+}
+
+/* ---------------- SHIFT HISTORY ---------------- */
+var HISTORY_KEY = 'duraknot_shift_history_v1';
+var shiftHistory = [];
+function loadHistory(){
+  try{ shiftHistory = JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; }
+  catch(e){ shiftHistory = []; }
+}
+function saveHistory(){
+  try{ localStorage.setItem(HISTORY_KEY, JSON.stringify(shiftHistory.slice(0,200))); }catch(e){}
+}
+function logCurrentShift(){
+  var o = computeOEE();
+  if(!o || state.plannedSec<5){
+    addAlert('info','Nothing to log yet — shift is too short.');
+    return false;
+  }
+  shiftHistory.unshift({
+    ts: nowMs(),
+    plannedSec: state.plannedSec, runSec: state.runSec, downSec: state.downSec,
+    totalLength: state.totalLength, defectEvents: state.defectEvents, stoppages: state.stoppages,
+    availability: o.availability, performance: o.performance, quality: o.quality, oee: o.oee
+  });
+  saveHistory();
+  if(liveMode){
+    fetch(apiUrl('/api/shifts/end'), {method:'POST'}).catch(function(){});
+  }
+  return true;
+}
+function fmtDuration(sec){
+  var h=Math.floor(sec/3600), m=Math.floor((sec%3600)/60), s=Math.floor(sec%60);
+  return (h?h+'h ':'')+(m?m+'m ':'')+s+'s';
+}
+function renderHistory(){
+  document.getElementById('h-count').textContent = shiftHistory.length;
+  document.getElementById('h-source').textContent = liveMode ? 'this device · local storage' : 'local storage';
+  var tb = document.getElementById('history-tbody');
+  if(!shiftHistory.length){
+    tb.innerHTML = '<tr><td colspan="7" class="empty">No shifts logged yet — click "End Shift" in the top bar.</td></tr>';
+    document.getElementById('h-best').textContent='—'; document.getElementById('h-best-sub').textContent='—';
+    document.getElementById('h-avg').textContent='—';
+    document.getElementById('h-length').innerHTML='0<span class="unit">m</span>';
+    return;
+  }
+  tb.innerHTML = shiftHistory.map(function(s){
+    return '<tr><td class="mono">'+new Date(s.ts).toLocaleString()+'</td>'+
+           '<td class="mono">'+fmtDuration(s.plannedSec)+'</td>'+
+           '<td class="mono">'+s.totalLength.toFixed(1)+' m</td>'+
+           '<td class="mono" style="color:'+colorFor(s.availability*100)+'">'+(s.availability*100).toFixed(1)+'%</td>'+
+           '<td class="mono" style="color:'+colorFor(s.performance*100)+'">'+(s.performance*100).toFixed(1)+'%</td>'+
+           '<td class="mono" style="color:'+colorFor(s.quality*100)+'">'+(s.quality*100).toFixed(1)+'%</td>'+
+           '<td class="mono r" style="color:'+colorFor(s.oee*100)+'"><b>'+(s.oee*100).toFixed(1)+'%</b></td></tr>';
+  }).join('');
+  var best = shiftHistory.reduce(function(a,b){return b.oee>a.oee?b:a;}, shiftHistory[0]);
+  var avg = shiftHistory.reduce(function(s,x){return s+x.oee;},0)/shiftHistory.length;
+  var totalLen = shiftHistory.reduce(function(s,x){return s+x.totalLength;},0);
+  document.getElementById('h-best').textContent=(best.oee*100).toFixed(1)+'%';
+  document.getElementById('h-best-sub').textContent=new Date(best.ts).toLocaleDateString();
+  document.getElementById('h-avg').textContent=(avg*100).toFixed(1)+'%';
+  document.getElementById('h-length').innerHTML=Math.round(totalLen).toLocaleString()+'<span class="unit">m</span>';
+}
+function drawShiftOee(){
+  var cv=document.getElementById('cv-shift-oee'); var s=setupCanvas(cv); if(!s) return;
+  var ctx=s.ctx, box={l:38,t:22,w:s.w-38-14,h:s.h-22-24};
+  gridAndAxis(ctx,box,100,function(v){return v.toFixed(0)+'%';});
+  if(shiftHistory.length<1){ ctx.fillStyle=C.dim; ctx.font='12px Segoe UI'; ctx.textAlign='center';
+    ctx.fillText('no shifts logged yet',s.w/2,s.h/2); return; }
+  var series = shiftHistory.slice(0,30).map(function(x){return x.oee*100;}).reverse();
+  if(series.length<2){ series=[series[0],series[0]]; }
+  drawSeries(ctx,box,series,100,C.purple,true,0);
+  ctx.fillStyle=C.dim; ctx.font='10px Segoe UI'; ctx.textAlign='center'; ctx.textBaseline='top';
+  ctx.fillText('oldest',box.l,box.t+box.h+6); ctx.fillText('latest',box.l+box.w,box.t+box.h+6);
+}
+
+/* ---------------- BACKEND SETTINGS ---------------- */
+var BACKEND_KEY = 'duraknot_backend_url';
+function getBackendUrl(){ try{ return localStorage.getItem(BACKEND_KEY) || ''; }catch(e){ return ''; } }
+function apiUrl(p){ var base=getBackendUrl(); return base ? base.replace(/\/+$/,'') + p : p; }
+
+/* ---------------- TICK LOOP ---------------- */
+function tick(){
+  if(paused) return;
+  handleReading(sim.tick());
+  renderAll();
+}
+function startLoop(){
+  if(timer) clearInterval(timer);
+  timer=setInterval(tick, 1000/speedMult);
+}
+
+/* ---------------- NAV ---------------- */
+var TITLES={overview:'Live Overview',oee:'OEE Analytics',quality:'Quality Analytics',alerts:'Alert Log',history:'Shift History'};
+Array.prototype.forEach.call(document.querySelectorAll('.nav-item'),function(item){
+  item.addEventListener('click',function(){
+    Array.prototype.forEach.call(document.querySelectorAll('.nav-item'),function(n){n.classList.remove('active');});
+    Array.prototype.forEach.call(document.querySelectorAll('.view'),function(v){v.classList.remove('active');});
+    item.classList.add('active');
+    currentView=item.getAttribute('data-view');
+    document.getElementById('view-'+currentView).classList.add('active');
+    document.getElementById('view-title').textContent=TITLES[currentView];
+    requestAnimationFrame(renderCharts);   // canvases were 0-width while hidden
+  });
+});
+
+/* ---------------- CONTROLS ---------------- */
+document.getElementById('btn-pause').addEventListener('click',function(e){
+  paused=!paused; e.target.textContent=paused?'Resume':'Pause';
+  e.target.className='btn'+(paused?' on':'');
+});
+document.getElementById('btn-speed').addEventListener('click',function(e){
+  speedMult = speedMult===1?2 : speedMult===2?5 : 1;
+  e.target.textContent=speedMult+'×';
+  e.target.className='btn'+(speedMult>1?' on':'');
+  startLoop();
+});
+function resetCounters(alertMsg){
+  state.plannedSec=0;state.runSec=0;state.downSec=0;state.totalLength=0;state.defectEvents=0;
+  state.stoppages=0;state.ticks=0;state.recent=[];state.oeeSeries=[];state.drateSeries=[];
+  state.alerts=[];state.lastStatus='RUNNING';
+  DEFECT_TYPES.forEach(function(d){state.defectsByType[d.name]=0;});
+  sim.total=0; sim.defects=0; sim.t=0; sim.stopUntil=0; sim.slowUntil=0; sim.status='RUNNING';
+  document.getElementById('pareto-tbody').innerHTML='<tr><td colspan="4" class="empty">No defects recorded yet</td></tr>';
+  addAlert('info',alertMsg||'Shift counters reset.');
+  seed(20); renderAll();
+}
+document.getElementById('btn-reset').addEventListener('click',function(){
+  resetCounters('Shift counters reset.');
+});
+document.getElementById('btn-end-shift').addEventListener('click',function(){
+  if(logCurrentShift()){
+    resetCounters('Shift logged to history — new shift started.');
+    renderHistory();
+  }
+});
+document.getElementById('btn-export').addEventListener('click',function(){
+  var o=computeOEE(), pd=paretoData();
+  var rows=[['Duraknot Production Shift Report'],['Generated',new Date().toLocaleString()],
+    ['Mode',liveMode?'Live hardware':'Simulation'],[],
+    ['Metric','Value'],
+    ['Length produced (m)',state.totalLength.toFixed(2)],
+    ['Order target (m)',ORDER_TARGET],
+    ['Target achieved (%)',(state.totalLength/ORDER_TARGET*100).toFixed(2)],
+    ['Planned time (s)',state.plannedSec],['Runtime (s)',state.runSec],['Downtime (s)',state.downSec],
+    ['Stoppages',state.stoppages],['Defect events',state.defectEvents],
+    ['Availability (%)',o?(o.availability*100).toFixed(2):'n/a'],
+    ['Performance (%)',o?(o.performance*100).toFixed(2):'n/a'],
+    ['Quality (%)',o?(o.quality*100).toFixed(2):'n/a'],
+    ['OEE (%)',o?(o.oee*100).toFixed(2):'n/a'],[],
+    ['Defect Pareto'],['Category','Count','Share %','Cumulative %']];
+  pd.rows.forEach(function(r){ rows.push([r.name,r.count,(r.share*100).toFixed(1),(r.cum*100).toFixed(1)]); });
+  rows.push([],['Alert log'],['Time','Level','Message']);
+  state.alerts.forEach(function(a){ rows.push([new Date(a.ts).toLocaleTimeString(),a.level,a.message]); });
+  var csv=rows.map(function(r){return r.map(function(c){return '"'+String(c).replace(/"/g,'""')+'"';}).join(',');}).join('\n');
+  var url=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  var a=document.createElement('a'); a.href=url;
+  a.download='duraknot_shift_report_'+Date.now()+'.csv'; a.click();
+  URL.revokeObjectURL(url);
+});
+
+/* clock */
+setInterval(function(){ document.getElementById('clock').textContent=new Date().toLocaleTimeString(); },1000);
+document.getElementById('clock').textContent=new Date().toLocaleTimeString();
+
+/* redraw on window resize */
+var rt=null;
+window.addEventListener('resize',function(){ clearTimeout(rt); rt=setTimeout(renderCharts,120); });
+
+/* ---------------- LIVE BACKEND DETECTION (optional) ----------------
+   If the Flask backend is serving this page, poll its REST API for real
+   sensor data. Purely additive: if it isn't there, the simulator runs.  */
+function tryLiveBackend(){
+  if(location.protocol==='file:' && !getBackendUrl()) return;   // opened from disk, no backend configured — simulator only
+  var ctrl = typeof AbortController!=='undefined' ? new AbortController() : null;
+  var to = setTimeout(function(){ if(ctrl) ctrl.abort(); },1500);
+  fetch(apiUrl('/api/kpis'),{signal:ctrl?ctrl.signal:undefined})
+    .then(function(res){ return res.ok?res.json():Promise.reject(); })
+    .then(function(d){
+      clearTimeout(to);
+      if(!d || d.ready===undefined) return;
+      liveMode=true;
+      document.getElementById('mode-badge').className='badge live';
+      document.getElementById('mode-text').textContent='Live Hardware';
+      addAlert('info','Connected to production line sensor node — streaming live data.');
+      if(timer) clearInterval(timer);
+      var lastDefectTotal=null;
+      timer=setInterval(function(){
+        if(paused) return;
+        fetch(apiUrl('/api/kpis')).then(function(r){return r.json();}).then(function(k){
+          if(!k.ready) return;
+          var defect=0;
+          if(lastDefectTotal!==null && k.defect_total>lastDefectTotal) defect=1;
+          lastDefectTotal=k.defect_total;
+          var type=null;
+          if(defect){
+            var r2=Math.random(),acc=0;
+            for(var i=0;i<DEFECT_TYPES.length;i++){acc+=DEFECT_TYPES[i].w; if(r2<=acc){type=DEFECT_TYPES[i].name;break;}}
+          }
+          handleReading({length_m:k.length_m,speed_mpm:k.speed_mpm,defect:defect,
+                         defect_type:type,defect_total:k.defect_total,status:k.status});
+          renderAll();
+        }).catch(function(){});
+      },1000);
+    })
+    .catch(function(){ clearTimeout(to); /* no backend — simulator already running */ });
+}
+
+/* ---------------- SETTINGS MODAL ---------------- */
+(function(){
+  var modal=document.getElementById('settings-modal');
+  var urlInput=document.getElementById('settings-url');
+  var status=document.getElementById('settings-status');
+  function open(){
+    urlInput.value = getBackendUrl();
+    status.textContent=''; status.className='modal-status';
+    modal.classList.remove('hidden');
+    urlInput.focus();
+  }
+  function close(){ modal.classList.add('hidden'); }
+  document.getElementById('btn-settings').addEventListener('click', open);
+  document.getElementById('settings-cancel').addEventListener('click', close);
+  modal.addEventListener('click', function(e){ if(e.target===modal) close(); });
+  document.getElementById('settings-clear').addEventListener('click', function(){
+    try{ localStorage.removeItem(BACKEND_KEY); }catch(e){}
+    status.textContent='Cleared — back to simulator. Reloading…'; status.className='modal-status ok';
+    setTimeout(function(){ location.reload(); }, 700);
+  });
+  document.getElementById('settings-save').addEventListener('click', function(){
+    var url = urlInput.value.trim().replace(/\/+$/,'');
+    if(!url){ status.textContent='Enter a URL, or use "Use Simulator" to clear it.'; status.className='modal-status err'; return; }
+    status.textContent='Checking connection…'; status.className='modal-status';
+    fetch(url+'/api/health',{ signal: typeof AbortController!=='undefined' ? (new AbortController()).signal : undefined })
+      .then(function(res){ return res.ok ? res.json() : Promise.reject(); })
+      .then(function(){
+        try{ localStorage.setItem(BACKEND_KEY, url); }catch(e){}
+        status.textContent='Connected. Reloading…'; status.className='modal-status ok';
+        setTimeout(function(){ location.reload(); }, 500);
+      })
+      .catch(function(){
+        status.textContent='Could not reach '+url+'/api/health — check the URL and that backend/app.py is running.';
+        status.className='modal-status err';
+      });
+  });
+})();
+
+/* ---------------- BOOT ---------------- */
+function seed(n){
+  seeding=true;
+  for(var i=0;i<n;i++){ seedRemaining = n-i; handleReading(sim.tick()); }
+  seeding=false; seedRemaining=0;
+}
+loadHistory();
+seed(SEED_TICKS);          // dashboard is populated the instant it opens
+addAlert('info','Monitoring started — Duraknot fence-roll line.');
+renderAll();
+startLoop();
+tryLiveBackend();
+</script>
+</body>
+</html>

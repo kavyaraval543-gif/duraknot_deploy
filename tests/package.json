@@ -1,0 +1,11 @@
+{
+  "name": "duraknot-dashboard-tests",
+  "private": true,
+  "description": "Test-only tooling for the Duraknot dashboard. The dashboard itself (../index.html) stays zero-dependency; jsdom is a dev dependency of the test harness only.",
+  "scripts": {
+    "test:render": "node render_check.js"
+  },
+  "devDependencies": {
+    "jsdom": "^25.0.0"
+  }
+}

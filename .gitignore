@@ -1,0 +1,9 @@
+node_modules/
+__pycache__/
+.pytest_cache/
+*.pyc
+backend/duraknot.db
+backend/server.log
+
+.vercel
+.env*
