@@ -4,6 +4,14 @@ IoT-enabled production monitoring for the Duraknot fence-roll line — A-1 Launc
 
 **Live dashboard:** https://duraknotdashboard.vercel.app
 
+**Status:** working dashboard running on a built-in simulator. The backend and ESP32 firmware are written and the backend's OEE calculation is unit-tested, but neither has been run against live sensors (see [`DATA_SOURCES.md`](DATA_SOURCES.md): no hardware was streaming data when this was written). OEE unit tests and a headless render check run in CI.
+
+## Overview
+
+The dashboard turns a fence-roll production line's raw signals (length produced, line speed, vibration-detected defects, running or stopped) into the numbers a production team manages by: **Overall Equipment Effectiveness (OEE = availability × performance × quality)**, defect patterns, alerts and shift-by-shift comparison. Views: live overview, OEE trend and loss breakdown, a defect Pareto and category breakdown, a full alert log, and a shift log.
+
+Because no real sensor stream was available, the simulator's constants were checked against published industry benchmarks, and that paper trail is in [`DATA_SOURCES.md`](DATA_SOURCES.md).
+
 ## What's here
 
 | Path | What it is |
@@ -44,3 +52,10 @@ python app.py
 Then point the dashboard's Settings panel (⚙, top right) at the backend's URL to switch it from simulation to live data.
 
 Tests run automatically on every push via [GitHub Actions](.github/workflows/test.yml).
+
+## Limitations and next steps
+
+- Simulated data only. The firmware and backend have not been validated with a real encoder and vibration sensor, so the live-data path is untested end to end.
+- The OEE formula is unit-tested, but the benchmark values behind the simulator are indicative figures from public sources, not measurements from the Duraknot line.
+- The dashboard is a single HTML file, which suits offline demos but is hard to extend.
+- Next: run the firmware against a real line or a bench rig, compare simulator output with real readings, and recalibrate.
